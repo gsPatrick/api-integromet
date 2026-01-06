@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import api from '../../../services/api';
-import { X, Save, Check, Sparkles, MessageCircle, User } from 'lucide-react';
+import { X, Save, Check, Sparkles, MessageCircle, User, Calculator, ArrowRight, DollarSign } from 'lucide-react';
 
 const API_URL = 'https://n8n-apintegromat.r954jc.easypanel.host';
 
@@ -22,6 +22,9 @@ export default function EditModal({ order, onClose, onSave }) {
 
     const [loading, setLoading] = useState(false);
     const imageUrl = getImageUrl(order.imageUrl);
+    const catalogPrice = Number(order.catalogPrice || 0);
+    const sellPrice = Number(formData.sellPrice || 0);
+    const markup = catalogPrice > 0 ? ((sellPrice - catalogPrice) / catalogPrice * 100).toFixed(1) : 0;
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -51,263 +54,331 @@ export default function EditModal({ order, onClose, onSave }) {
             <div
                 className="modal-content animate-slideUp"
                 onClick={(e) => e.stopPropagation()}
-                style={{ width: '900px', padding: 0, overflow: 'hidden' }}
+                style={{ width: '1000px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             >
-                <div style={{ display: 'flex' }}>
-                    {/* Left: Image + Chat */}
+                {/* Header with Title */}
+                <div style={{
+                    padding: '20px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: 'white'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            background: '#fff3e0',
+                            color: '#ff9f43',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <Sparkles size={20} />
+                        </div>
+                        <div>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#2d3436', margin: 0 }}>
+                                Editar Pedido #{order.id}
+                            </h2>
+                            <p style={{ margin: 0, fontSize: '0.875rem', color: '#636e72', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <User size={12} /> {order.customerName} • {order.customerPhone}
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="btn-ghost" style={{ padding: '8px' }}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', height: '600px' }}>
+
+                    {/* LEFT PANEL: WhatsApp Simulation */}
                     <div style={{
-                        width: '400px',
-                        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
-                        padding: '24px',
+                        width: '380px',
+                        background: '#e5ddd5',
+                        borderRight: '1px solid #d1d5db',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '20px'
+                        position: 'relative'
                     }}>
-                        {/* Product Image */}
+                        {/* WhatsApp Header */}
                         <div style={{
-                            position: 'relative',
-                            height: '280px',
-                            borderRadius: '12px',
-                            overflow: 'hidden',
-                            background: '#27272a'
+                            background: '#075e54',
+                            padding: '10px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            color: 'white'
                         }}>
-                            {imageUrl ? (
-                                <Image
-                                    src={imageUrl}
-                                    alt="Produto"
-                                    fill
-                                    style={{ objectFit: 'contain' }}
-                                />
-                            ) : (
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    height: '100%',
-                                    color: '#71717a'
-                                }}>
-                                    Sem imagem
+                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ccc', overflow: 'hidden' }}>
+                                <div style={{ width: '100%', height: '100%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}>
+                                    <User size={20} />
                                 </div>
-                            )}
+                            </div>
+                            <div style={{ lineHeight: 1.2 }}>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{order.customerName || 'Cliente'}</div>
+                                <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>visto por último hoje à(s) {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                            </div>
                         </div>
 
-                        {/* WhatsApp Chat Simulation */}
+                        {/* WhatsApp Background Pattern */}
                         <div style={{
-                            backgroundColor: '#e5ddd5',
-                            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
-                            borderRadius: '12px',
-                            padding: '16px',
                             flex: 1,
+                            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+                            opacity: 0.4,
+                            position: 'absolute',
+                            inset: 0,
+                            zIndex: 0,
+                            top: '52px' // Height of header
+                        }} />
+
+                        {/* Messages Area */}
+                        <div style={{
+                            flex: 1,
+                            padding: '20px',
+                            overflowY: 'auto',
+                            position: 'relative',
+                            zIndex: 1,
                             display: 'flex',
                             flexDirection: 'column',
-                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+                            gap: '8px'
                         }}>
+                            {/* The Message Bubble */}
                             <div style={{
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                color: '#075e54',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                marginBottom: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                background: 'rgba(255,255,255,0.9)',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
                                 alignSelf: 'flex-start',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                            }}>
-                                <MessageCircle size={12} />
-                                WhatsApp Original
-                            </div>
-
-                            {/* Message Bubble */}
-                            <div style={{
-                                background: '#dcf8c6',
-                                padding: '10px 14px',
-                                borderRadius: '8px 8px 0 8px',
-                                maxWidth: '90%',
-                                marginLeft: 'auto',
+                                maxWidth: '85%',
+                                background: 'white',
+                                borderRadius: '0 8px 8px 8px',
                                 boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                padding: '4px',
                                 position: 'relative'
                             }}>
+                                {/* Triangle arrow */}
                                 <div style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    color: '#128c7e',
-                                    marginBottom: '4px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}>
-                                    <User size={12} />
-                                    {order.customerName || 'Cliente'}
+                                    position: 'absolute',
+                                    left: '-8px',
+                                    top: '0',
+                                    width: '0',
+                                    height: '0',
+                                    borderTop: '0 solid transparent',
+                                    borderRight: '12px solid white',
+                                    borderBottom: '12px solid transparent'
+                                }} />
+
+                                <div style={{ padding: '4px' }}>
+                                    {/* Image inside bubble if exists (Like WhatsApp Image Message) */}
+                                    {imageUrl && (
+                                        <div style={{
+                                            marginBottom: '6px',
+                                            borderRadius: '6px',
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                            paddingTop: '100%', // 1:1 Aspect Ratio box
+                                            background: '#f0f0f0'
+                                        }}>
+                                            <Image
+                                                src={imageUrl}
+                                                alt="Enviado"
+                                                fill
+                                                style={{ objectFit: 'cover' }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Text Caption */}
+                                    {order.originalMessage && (
+                                        <div style={{
+                                            padding: '0 4px 4px 4px',
+                                            fontSize: '0.95rem',
+                                            color: '#111',
+                                            lineHeight: 1.4,
+                                            whiteSpace: 'pre-wrap'
+                                        }}>
+                                            {order.originalMessage}
+                                        </div>
+                                    )}
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: '#111', lineHeight: '1.4' }}>
-                                    {order.originalMessage || '(Mensagem não disponível)'}
-                                </div>
+
+                                {/* Metadata inside bubble */}
                                 <div style={{
-                                    fontSize: '0.65rem',
-                                    color: '#667781',
-                                    textAlign: 'right',
-                                    marginTop: '4px',
                                     display: 'flex',
-                                    alignItems: 'center',
                                     justifyContent: 'flex-end',
-                                    gap: '4px'
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    paddingRight: '6px',
+                                    paddingBottom: '4px',
+                                    marginTop: '-4px'
                                 }}>
-                                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    <Check size={14} color="#53bdeb" />
+                                    <span style={{ fontSize: '0.65rem', color: '#999' }}>
+                                        {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right: Form */}
-                    <div style={{ flex: 1, padding: '32px', background: 'white' }}>
-                        {/* Header */}
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '24px'
-                        }}>
-                            <div>
-                                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0a0a0a', marginBottom: '4px' }}>
-                                    Pedido #{order.id}
-                                </h2>
-                                <p style={{ color: '#71717a', fontSize: '0.875rem' }}>
-                                    {order.customerPhone}
-                                </p>
+                    {/* CENTER & RIGHT: Info and Form */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#f8fafc', overflowY: 'auto' }}>
+
+                        <div style={{ padding: '24px', display: 'flex', gap: '24px', flexDirection: 'column' }}>
+
+                            {/* Financial Info Card */}
+                            <div className="card" style={{ padding: '20px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#64748b' }}>
+                                    <Calculator size={18} />
+                                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                        Dados Financeiros (IA)
+                                    </h3>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Preço Catálogo (IA)</div>
+                                        <div style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a' }}>
+                                            R$ {catalogPrice.toFixed(2)}
+                                        </div>
+                                    </div>
+
+                                    <ArrowRight size={20} color="#94a3b8" />
+
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Markup Aplicado</div>
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            padding: '4px 8px',
+                                            background: '#dbeafe',
+                                            color: '#1e40af',
+                                            borderRadius: '6px',
+                                            fontSize: '0.875rem',
+                                            fontWeight: 600
+                                        }}>
+                                            {markup}%
+                                        </div>
+                                    </div>
+
+                                    <ArrowRight size={20} color="#94a3b8" />
+
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px' }}>Preço Venda</div>
+                                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                                            R$ {sellPrice.toFixed(2)}
+                                        </div>
+                                    </div>
+
+                                </div>
                             </div>
-                            <button
-                                onClick={onClose}
-                                style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #e4e4e7',
-                                    background: 'white',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transition: 'background 0.2s',
-                                    color: '#71717a'
-                                }}
-                                className="btn-ghost"
-                            >
-                                <X size={16} />
-                            </button>
+
+                            {/* Editing Form */}
+                            <div className="card" style={{ padding: '20px', border: '1px solid #e2e8f0', flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: '#64748b' }}>
+                                    <Sparkles size={18} />
+                                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                        Edição dos Dados
+                                    </h3>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                            Produto
+                                        </label>
+                                        <input
+                                            name="productRaw"
+                                            value={formData.productRaw}
+                                            onChange={handleChange}
+                                            className="input"
+                                            placeholder="Nome do produto..."
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                                Tamanho
+                                            </label>
+                                            <input
+                                                name="extractedSize"
+                                                value={formData.extractedSize}
+                                                onChange={handleChange}
+                                                className="input"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                                Cor
+                                            </label>
+                                            <input
+                                                name="extractedColor"
+                                                value={formData.extractedColor}
+                                                onChange={handleChange}
+                                                className="input"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                                Quantidade
+                                            </label>
+                                            <input
+                                                name="quantity"
+                                                type="number"
+                                                value={formData.quantity}
+                                                onChange={handleChange}
+                                                className="input"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                                Preço Final (R$)
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <DollarSign size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                                <input
+                                                    name="sellPrice"
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={formData.sellPrice}
+                                                    onChange={handleChange}
+                                                    className="input"
+                                                    style={{ paddingLeft: '32px', fontWeight: 600 }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
 
-                        {/* AI Badge */}
+                        {/* Footer Actions */}
                         <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: '#eff6ff',
-                            color: '#2563eb',
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            marginBottom: '24px'
-                        }}>
-                            <Sparkles size={14} />
-                            Extraído por IA
-                        </div>
-
-                        {/* Form Fields */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
-                                    Produto
-                                </label>
-                                <input
-                                    name="productRaw"
-                                    value={formData.productRaw}
-                                    onChange={handleChange}
-                                    className="input"
-                                />
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
-                                        Tamanho
-                                    </label>
-                                    <input
-                                        name="extractedSize"
-                                        value={formData.extractedSize}
-                                        onChange={handleChange}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
-                                        Cor
-                                    </label>
-                                    <input
-                                        name="extractedColor"
-                                        value={formData.extractedColor}
-                                        onChange={handleChange}
-                                        className="input"
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
-                                        Quantidade
-                                    </label>
-                                    <input
-                                        name="quantity"
-                                        type="number"
-                                        value={formData.quantity}
-                                        onChange={handleChange}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
-                                        Preço de Venda (R$)
-                                    </label>
-                                    <input
-                                        name="sellPrice"
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.sellPrice}
-                                        onChange={handleChange}
-                                        className="input"
-                                        style={{ fontWeight: 600, fontSize: '1rem' }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div style={{
+                            padding: '20px 24px',
+                            background: 'white',
+                            borderTop: '1px solid #e5e7eb',
                             display: 'flex',
                             gap: '12px',
-                            marginTop: '32px',
-                            paddingTop: '24px',
-                            borderTop: '1px solid #e4e4e7'
+                            marginTop: 'auto'
                         }}>
-                            <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }} disabled={loading}>
+                            <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>
                                 Cancelar
                             </button>
-                            <button onClick={() => handleSave(false)} className="btn btn-secondary" style={{ flex: 1 }} disabled={loading}>
-                                <Save size={16} />
-                                Rascunho
+                            <button onClick={() => handleSave(false)} className="btn btn-secondary" style={{ flex: 1 }}>
+                                <Save size={18} />
+                                Salvar Rascunho
                             </button>
-                            <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-                                <Check size={16} />
-                                {loading ? 'Enviando...' : 'Bling'}
+                            <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 1 }}>
+                                <Check size={18} />
+                                {loading ? 'Enviando...' : 'Sincronizar Bling'}
                             </button>
                         </div>
+
                     </div>
                 </div>
             </div>
