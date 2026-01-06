@@ -88,7 +88,8 @@ export default function HistoryPage() {
                                         {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </td>
                                 </tr>
-                            ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
