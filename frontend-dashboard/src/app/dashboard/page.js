@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import OrderCard from '../../components/orders/OrderCard/OrderCard';
 import EditModal from '../../components/orders/EditModal/EditModal';
-import { Package, RefreshCw, Inbox, User, Phone, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react';
+import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState(null);
-    const [expandedCustomers, setExpandedCustomers] = useState({}); // { phone: true/false }
+    const [expandedCustomers, setExpandedCustomers] = useState({});
+    const [selectedOrders, setSelectedOrders] = useState({}); // { orderId: true/false }
+    const [syncing, setSyncing] = useState(null); // phone of customer currently syncing
 
     useEffect(() => {
         fetchOrders();
@@ -19,8 +21,7 @@ export default function Dashboard() {
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/orders?limit=100'); // Get more orders to group
-            // Group By Customer Phone
+            const response = await api.get('/orders?limit=100');
             const grouped = {};
             response.data.data.forEach(order => {
                 const phone = order.customerPhone;
@@ -36,7 +37,6 @@ export default function Dashboard() {
                 grouped[phone].totalValue += parseFloat(order.sellPrice || 0);
             });
 
-            // Convert to array and sort by latest order
             const groupedArray = Object.values(grouped).sort((a, b) => {
                 const latestA = new Date(a.orders[0].createdAt);
                 const latestB = new Date(b.orders[0].createdAt);
@@ -45,7 +45,6 @@ export default function Dashboard() {
 
             setOrders(groupedArray);
 
-            // Auto-expand all by default
             const initialExpanded = {};
             groupedArray.forEach(g => initialExpanded[g.customerPhone] = true);
             setExpandedCustomers(initialExpanded);
@@ -60,6 +59,77 @@ export default function Dashboard() {
 
     const toggleExpand = (phone) => {
         setExpandedCustomers(prev => ({ ...prev, [phone]: !prev[phone] }));
+    };
+
+    // Toggle single order selection
+    const toggleOrderSelection = (orderId) => {
+        setSelectedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+    };
+
+    // Select/Deselect all orders for a customer
+    const toggleSelectAllForCustomer = (group) => {
+        const allSelected = group.orders.every(o => selectedOrders[o.id]);
+        const newSelections = { ...selectedOrders };
+        group.orders.forEach(o => {
+            newSelections[o.id] = !allSelected;
+        });
+        setSelectedOrders(newSelections);
+    };
+
+    // Check if all orders for a customer are selected
+    const areAllSelectedForCustomer = (group) => {
+        return group.orders.length > 0 && group.orders.every(o => selectedOrders[o.id]);
+    };
+
+    // Get selected order IDs for a customer
+    const getSelectedIdsForCustomer = (group) => {
+        return group.orders.filter(o => selectedOrders[o.id]).map(o => o.id);
+    };
+
+    // Sync selected orders
+    const handleSyncSelected = async (group) => {
+        const selectedIds = getSelectedIdsForCustomer(group);
+
+        if (selectedIds.length === 0) {
+            alert('Selecione pelo menos um pedido para sincronizar.');
+            return;
+        }
+
+        if (!confirm(`Deseja sincronizar ${selectedIds.length} pedido(s) selecionado(s)?`)) return;
+
+        setSyncing(group.customerPhone);
+        try {
+            // Sync each selected order individually (mode=single means no auto-grouping)
+            for (const id of selectedIds) {
+                await api.post(`/orders/${id}/sync-bling?mode=single`);
+            }
+            alert(`${selectedIds.length} pedido(s) sincronizado(s) com sucesso!`);
+            // Clear selections for this customer
+            const newSelections = { ...selectedOrders };
+            group.orders.forEach(o => { newSelections[o.id] = false; });
+            setSelectedOrders(newSelections);
+            fetchOrders();
+        } catch (err) {
+            alert('Erro ao sincronizar: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setSyncing(null);
+        }
+    };
+
+    // Sync ALL orders for a customer (grouped into one Bling order)
+    const handleSyncAllGrouped = async (group) => {
+        if (!confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos como um único pedido no Bling?`)) return;
+
+        setSyncing(group.customerPhone);
+        try {
+            await api.post(`/customers/${encodeURIComponent(group.customerPhone)}/sync`);
+            alert('Sincronização em massa concluída!');
+            fetchOrders();
+        } catch (err) {
+            alert('Erro: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setSyncing(null);
+        }
     };
 
     if (loading) {
@@ -81,7 +151,7 @@ export default function Dashboard() {
                         Pedidos
                     </h1>
                     <p style={{ color: '#71717a', fontSize: '0.875rem' }}>
-                        Gerencie os pedidos agrupados por cliente
+                        Selecione pedidos para sincronizar individualmente ou em lote
                     </p>
                 </div>
 
@@ -110,97 +180,156 @@ export default function Dashboard() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                    {orders.map(group => (
-                        <div key={group.customerPhone} style={{ opacity: expandedCustomers[group.customerPhone] ? 1 : 0.8, transition: 'opacity 0.2s' }}>
+                    {orders.map(group => {
+                        const selectedCount = getSelectedIdsForCustomer(group).length;
+                        const allSelected = areAllSelectedForCustomer(group);
+                        const isSyncing = syncing === group.customerPhone;
 
-                            {/* Customer Header */}
-                            <div
-                                onClick={() => toggleExpand(group.customerPhone)}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    marginBottom: '16px',
-                                    cursor: 'pointer',
-                                    userSelect: 'none'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fff3e0', color: '#e58e26', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                                        {group.customerName?.charAt(0).toUpperCase()}
+                        return (
+                            <div key={group.customerPhone} className="card" style={{ overflow: 'hidden' }}>
+
+                                {/* Customer Header */}
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '20px 24px',
+                                        background: expandedCustomers[group.customerPhone] ? '#fffbf5' : 'white',
+                                        cursor: 'pointer',
+                                        transition: 'background 0.2s'
+                                    }}
+                                    onClick={() => toggleExpand(group.customerPhone)}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        {/* Select All Checkbox */}
+                                        <div
+                                            onClick={(e) => { e.stopPropagation(); toggleSelectAllForCustomer(group); }}
+                                            style={{ cursor: 'pointer', color: allSelected ? '#e67e22' : '#b2bec3' }}
+                                        >
+                                            {allSelected ? <CheckSquare size={22} /> : <Square size={22} />}
+                                        </div>
+
+                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fff3e0', color: '#e58e26', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                                            {group.customerName?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
+                                                {group.customerName || 'Cliente WhatsApp'}
+                                            </h3>
+                                            <p style={{ fontSize: '0.85rem', color: '#636e72', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Phone size={12} /> {group.customerPhone}
+                                            </p>
+                                        </div>
+                                        <div style={{ marginLeft: '16px', padding: '4px 12px', borderRadius: '12px', background: '#ecf0f1', fontSize: '0.8rem', fontWeight: 600, color: '#2d3436' }}>
+                                            {group.orders.length} ite{group.orders.length > 1 ? 'ns' : 'm'}
+                                        </div>
+                                        {selectedCount > 0 && (
+                                            <div style={{ padding: '4px 12px', borderRadius: '12px', background: '#fff3e0', fontSize: '0.8rem', fontWeight: 600, color: '#e67e22' }}>
+                                                {selectedCount} selecionado{selectedCount > 1 ? 's' : ''}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
-                                            {group.customerName || 'Cliente WhatsApp'}
-                                        </h3>
-                                        <p style={{ fontSize: '0.85rem', color: '#636e72', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <Phone size={12} /> {group.customerPhone}
-                                        </p>
-                                    </div>
-                                    <div style={{ marginLeft: '16px', padding: '4px 12px', borderRadius: '12px', background: '#ecf0f1', fontSize: '0.8rem', fontWeight: 600, color: '#2d3436' }}>
-                                        {group.orders.length} ite{group.orders.length > 1 ? 'ns' : 'm'}
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        {/* Sync Selected Button */}
+                                        {selectedCount > 0 && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleSyncSelected(group); }}
+                                                disabled={isSyncing}
+                                                style={{
+                                                    padding: '8px 14px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    background: '#3498db',
+                                                    color: 'white',
+                                                    fontWeight: 600,
+                                                    fontSize: '0.8rem',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px'
+                                                }}
+                                            >
+                                                {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                                Sinc. Selecionados
+                                            </button>
+                                        )}
+
+                                        {/* Sync All Grouped Button */}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleSyncAllGrouped(group); }}
+                                            disabled={isSyncing}
+                                            style={{
+                                                padding: '8px 14px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: '#e67e22',
+                                                color: 'white',
+                                                fontWeight: 600,
+                                                fontSize: '0.8rem',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                            }}
+                                        >
+                                            {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                            Sinc. Tudo
+                                        </button>
+
+                                        <div style={{ textAlign: 'right', minWidth: '100px' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#636e72', display: 'block' }}>Total</span>
+                                            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00b894' }}>
+                                                R$ {group.totalValue.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        {expandedCustomers[group.customerPhone] ? <ChevronUp size={20} color="#b2bec3" /> : <ChevronDown size={20} color="#b2bec3" />}
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Prevent toggle
-                                            if (confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos deste cliente?`)) {
-                                                api.post(`/customers/${encodeURIComponent(group.customerPhone)}/sync`)
-                                                    .then(() => { alert('Sincronização em massa iniciada!'); fetchOrders(); })
-                                                    .catch(err => alert('Erro: ' + (err.response?.data?.error || err.message)));
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '8px 16px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            background: '#e67e22',
-                                            color: 'white',
-                                            fontWeight: 600,
-                                            fontSize: '0.85rem',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px'
-                                        }}
-                                    >
-                                        <RefreshCw size={14} />
-                                        Sinc. Tudo
-                                    </button>
+                                {/* Orders Grid (Collapsible) */}
+                                {expandedCustomers[group.customerPhone] && (
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                                        gap: '16px',
+                                        padding: '20px 24px',
+                                        background: '#fafafa',
+                                        borderTop: '1px solid #f1f2f6'
+                                    }}>
+                                        {group.orders.map(order => (
+                                            <div key={order.id} style={{ position: 'relative' }}>
+                                                {/* Checkbox Overlay */}
+                                                <div
+                                                    onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order.id); }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '12px',
+                                                        left: '12px',
+                                                        zIndex: 10,
+                                                        cursor: 'pointer',
+                                                        background: 'white',
+                                                        borderRadius: '4px',
+                                                        padding: '2px',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                                        color: selectedOrders[order.id] ? '#e67e22' : '#b2bec3'
+                                                    }}
+                                                >
+                                                    {selectedOrders[order.id] ? <CheckSquare size={20} /> : <Square size={20} />}
+                                                </div>
 
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: '0.8rem', color: '#636e72', display: 'block' }}>Total Estimado</span>
-                                        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#00b894' }}>
-                                            R$ {group.totalValue.toFixed(2)}
-                                        </span>
+                                                <OrderCard
+                                                    order={order}
+                                                    onClick={setSelectedOrder}
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
-                                    {expandedCustomers[group.customerPhone] ? <ChevronUp size={20} color="#b2bec3" /> : <ChevronDown size={20} color="#b2bec3" />}
-                                </div>
+                                )}
                             </div>
-
-                            {/* Orders Grid (Collapsible) */}
-                            {expandedCustomers[group.customerPhone] && (
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                                    gap: '20px',
-                                    paddingLeft: '16px',
-                                    borderLeft: '2px solid #fdcb6e',
-                                    animation: 'fadeIn 0.3s ease'
-                                }}>
-                                    {group.orders.map(order => (
-                                        <OrderCard
-                                            key={order.id}
-                                            order={order}
-                                            onClick={setSelectedOrder}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
