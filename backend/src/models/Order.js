@@ -38,6 +38,14 @@ const Order = sequelize.define('Order', {
     status: {
         type: DataTypes.ENUM('PENDING', 'PROCESSED', 'ERROR'),
         defaultValue: 'PENDING'
+    },
+    imageUrl: {
+        type: DataTypes.TEXT, // Long URL or local path
+        allowNull: true
+    },
+    quantity: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
     }
 }, {
     tableName: 'orders',

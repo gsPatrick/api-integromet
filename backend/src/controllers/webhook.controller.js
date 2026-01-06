@@ -4,6 +4,7 @@ const whatsappService = require('../services/whatsapp.service');
 const aiService = require('../services/ai.service');
 const sheetsService = require('../services/sheets.service');
 const blingService = require('../services/bling.service');
+const storageService = require('../services/storage.service');
 
 class WebhookController {
 
@@ -112,6 +113,7 @@ class WebhookController {
             sellPrice = Math.round(sellPrice * 100) / 100;
         }
 
+        // Create order first to get ID
         const newOrder = await Order.create({
             customerName: payload.senderName || 'Unknown',
             customerPhone: payload.participantPhone || payload.phone,
@@ -120,10 +122,17 @@ class WebhookController {
             extractedColor: aiResult.cor,
             catalogPrice: catalogPrice,
             sellPrice: sellPrice,
-            imageUrl: targetImageUrl,
+            imageUrl: targetImageUrl, // Temporary - will be updated below
             quantity: aiResult.quantidade || 1,
             status: catalogPrice ? 'PROCESSED' : 'PENDING'
         });
+
+        // Download and save image locally
+        const localImagePath = await storageService.downloadAndSaveImage(targetImageUrl, newOrder.id);
+        if (localImagePath) {
+            await newOrder.update({ imageUrl: localImagePath });
+            console.log(`[Webhook] Image saved locally: ${localImagePath}`);
+        }
 
         console.log(`[Webhook] Order #${newOrder.id} created.`);
 

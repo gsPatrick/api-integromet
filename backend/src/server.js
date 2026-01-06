@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const sequelize = require('./config/database');
 const webhookController = require('./controllers/webhook.controller');
 const blingController = require('./controllers/bling.controller');
 const orderController = require('./controllers/order.controller');
 const authController = require('./controllers/auth.controller');
-const importController = require('./controllers/import.controller'); // Import Controller
+const importController = require('./controllers/import.controller');
 const authMiddleware = require('./middleware/auth');
-const User = require('./models/User'); // Import User model
+const User = require('./models/User');
 
 require('dotenv').config();
 
@@ -17,6 +18,9 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files (uploaded images)
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // Public Routes
 app.post('/webhook', webhookController.handleWebhook);
