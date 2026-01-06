@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
-import styles from './page.module.css';
-import { Trash2 } from 'lucide-react';
+import { Settings, Link2, Unlink, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 export default function SettingsPage() {
     const [blingConnected, setBlingConnected] = useState(false);
@@ -30,7 +29,6 @@ export default function SettingsPage() {
             setLoading(true);
             await api.delete('/auth/bling/disconnect');
             setBlingConnected(false);
-            alert('Desconectado com sucesso!');
         } catch (error) {
             alert('Erro ao desconectar.');
         } finally {
@@ -43,34 +41,105 @@ export default function SettingsPage() {
     };
 
     return (
-        <div className={styles.container}>
-            <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold', marginBottom: '24px', color: '#111827' }}>Configurações</h1>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '32px' }}>
+                <h1 style={{
+                    fontSize: '1.875rem',
+                    fontWeight: 700,
+                    color: '#0a0a0a',
+                    marginBottom: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                }}>
+                    <Settings size={28} color="#2563eb" />
+                    Configurações
+                </h1>
+                <p style={{ color: '#71717a', fontSize: '0.875rem' }}>
+                    Gerencie as integrações e preferências do sistema
+                </p>
+            </div>
 
-            {/* BLING CARD */}
+            {/* Bling Integration Card */}
             <div className="card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Integração Bling</h2>
-                    <span className={blingConnected ? 'badge badge-green' : 'badge badge-yellow'}>
-                        {blingConnected ? 'Conectado' : 'Desconectado'}
-                    </span>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '20px'
+                }}>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                        {/* Logo */}
+                        <div style={{
+                            width: '48px',
+                            height: '48px',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <Link2 size={24} color="white" />
+                        </div>
+
+                        <div>
+                            <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#0a0a0a', marginBottom: '4px' }}>
+                                Bling ERP
+                            </h2>
+                            <p style={{ color: '#71717a', fontSize: '0.875rem', maxWidth: '400px' }}>
+                                Sincronize seus pedidos automaticamente com o Bling para gestão completa de vendas.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    {!loading && (
+                        <span
+                            className={blingConnected ? 'badge badge-green' : 'badge badge-yellow'}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            {blingConnected ? (
+                                <>
+                                    <CheckCircle size={12} />
+                                    Conectado
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle size={12} />
+                                    Desconectado
+                                </>
+                            )}
+                        </span>
+                    )}
                 </div>
 
-                <p style={{ color: '#64748b', marginBottom: '24px' }}>
-                    Sincronize seus pedidos automaticamente com o Bling ERP.
-                </p>
-
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    {!loading && !blingConnected && (
-                        <a href={getBlingAuthUrl()} className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                            Conectar Bling
-                        </a>
-                    )}
-
-                    {!loading && blingConnected && (
-                        <button onClick={handleDisconnect} className="btn" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                            <Trash2 size={16} style={{ marginRight: '8px' }} />
+                {/* Actions */}
+                <div style={{
+                    display: 'flex',
+                    gap: '12px',
+                    paddingTop: '20px',
+                    borderTop: '1px solid #e4e4e7'
+                }}>
+                    {loading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#71717a' }}>
+                            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                            Verificando...
+                        </div>
+                    ) : blingConnected ? (
+                        <button
+                            onClick={handleDisconnect}
+                            className="btn btn-secondary"
+                            style={{ color: '#ef4444' }}
+                        >
+                            <Unlink size={16} />
                             Desconectar
                         </button>
+                    ) : (
+                        <a href={getBlingAuthUrl()} className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                            <Link2 size={16} />
+                            Conectar Bling
+                        </a>
                     )}
                 </div>
             </div>

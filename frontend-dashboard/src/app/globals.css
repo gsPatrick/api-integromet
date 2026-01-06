@@ -2,6 +2,9 @@
    PREMIUM THEME - White + Black + Blue
    ====================================== */
 
+/* Google Fonts - Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 /* Reset and Base */
 *,
 *::before,
@@ -112,6 +115,7 @@ a:hover {
     border: none;
     cursor: pointer;
     transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
 }
 
 .btn:disabled {
@@ -209,6 +213,7 @@ a:hover {
     background: var(--white);
     color: var(--gray-900);
     transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: 'Inter', sans-serif;
 }
 
 .input:focus {
@@ -255,6 +260,16 @@ a:hover {
 
     50% {
         opacity: 0.5;
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
     }
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import api from '../../../services/api';
-import styles from './EditModal.module.css';
+import { X, Save, Check, Sparkles, MessageCircle, User } from 'lucide-react';
 
 const API_URL = 'https://n8n-apintegromat.r954jc.easypanel.host';
 
@@ -108,8 +108,8 @@ export default function EditModal({ order, onClose, onSave }) {
                                 alignItems: 'center',
                                 gap: '6px'
                             }}>
-                                <div style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%' }} />
-                                WhatsApp Original
+                                <MessageCircle size={14} />
+                                Mensagem Original
                             </div>
 
                             {/* Message Bubble */}
@@ -120,7 +120,16 @@ export default function EditModal({ order, onClose, onSave }) {
                                 maxWidth: '90%',
                                 marginLeft: 'auto'
                             }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#128c7e', marginBottom: '4px' }}>
+                                <div style={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    color: '#128c7e',
+                                    marginBottom: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}>
+                                    <User size={12} />
                                     {order.customerName || 'Cliente'}
                                 </div>
                                 <div style={{ fontSize: '0.9rem', color: '#111' }}>
@@ -137,7 +146,7 @@ export default function EditModal({ order, onClose, onSave }) {
                                     gap: '4px'
                                 }}>
                                     {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    <span style={{ color: '#53bdeb' }}>✓✓</span>
+                                    <Check size={14} color="#53bdeb" />
                                 </div>
                             </div>
                         </div>
@@ -169,14 +178,12 @@ export default function EditModal({ order, onClose, onSave }) {
                                     border: '1px solid #e4e4e7',
                                     background: 'white',
                                     cursor: 'pointer',
-                                    fontSize: '1.25rem',
-                                    color: '#71717a',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center'
                                 }}
                             >
-                                ×
+                                <X size={16} color="#71717a" />
                             </button>
                         </div>
 
@@ -193,7 +200,8 @@ export default function EditModal({ order, onClose, onSave }) {
                             fontWeight: 600,
                             marginBottom: '24px'
                         }}>
-                            ✨ Extraído por IA
+                            <Sparkles size={14} />
+                            Extraído por IA
                         </div>
 
                         {/* Form Fields */}
@@ -276,10 +284,12 @@ export default function EditModal({ order, onClose, onSave }) {
                                 Cancelar
                             </button>
                             <button onClick={() => handleSave(false)} className="btn btn-ghost" disabled={loading}>
-                                Salvar Rascunho
+                                <Save size={16} />
+                                Rascunho
                             </button>
                             <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
-                                {loading ? 'Enviando...' : '✅ Sincronizar Bling'}
+                                <Check size={16} />
+                                {loading ? 'Enviando...' : 'Sincronizar Bling'}
                             </button>
                         </div>
                     </div>
