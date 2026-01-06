@@ -21,32 +21,8 @@ export default function Dashboard() {
             setOrders(response.data.data);
         } catch (error) {
             console.error('Failed to fetch orders:', error);
-            // MOCK DATA FALLBACK FOR DEMONSTRATION
-            setOrders([
-                {
-                    id: 1,
-                    customerName: 'Maria Silva',
-                    customerPhone: '5511999999999',
-                    productRaw: 'Vestido Florido Verao',
-                    extractedSize: 'M',
-                    extractedColor: 'Vermelho',
-                    sellPrice: 149.90,
-                    status: 'PENDING',
-                    imageUrl: 'https://storage.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/image.jpeg'
-                },
-                {
-                    id: 2,
-                    customerName: 'João Santos',
-                    customerPhone: '5511988888888',
-                    productRaw: 'Camisa Polo Básica',
-                    extractedSize: 'G',
-                    extractedColor: 'Azul Marinho',
-                    sellPrice: 89.90,
-                    status: 'PROCESSED',
-                    imageUrl: null
-                }
-            ]);
-            // alert('Erro ao carregar pedidos. Usando DADOS MOCKADOS para visualização.');
+            // alert('Erro ao buscar pedidos. Verifique a conexão com o backend.');
+            setOrders([]); // Clear orders on error, no mock data
         } finally {
             setLoading(false);
         }
@@ -56,21 +32,27 @@ export default function Dashboard() {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-            <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '2rem' }}>Painel de Pedidos (Mock View)</h1>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '1.5rem', color: '#111827' }}>Pedidos</h1>
 
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: '1.5rem'
-            }}>
-                {orders.map(order => (
-                    <OrderCard
-                        key={order.id}
-                        order={order}
-                        onClick={setSelectedOrder}
-                    />
-                ))}
-            </div>
+            {orders.length === 0 ? (
+                <div style={{ color: '#64748b', textAlign: 'center', marginTop: '40px' }}>
+                    Nenhum pedido encontrado. Aguardando novas mensagens do WhatsApp...
+                </div>
+            ) : (
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '24px'
+                }}>
+                    {orders.map(order => (
+                        <OrderCard
+                            key={order.id}
+                            order={order}
+                            onClick={setSelectedOrder}
+                        />
+                    ))}
+                </div>
+            )}
 
             {selectedOrder && (
                 <EditModal

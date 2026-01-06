@@ -44,8 +44,24 @@ async function startServer() {
         await sequelize.sync({ alter: true }); // 'alter' updates tables if models change
         console.log('[Server] Database synced successfully.');
 
-        app.listen(PORT, () => {
+        const User = require('./models/User'); // Import User model
+
+        app.listen(PORT, async () => {
             console.log(`[Server] Running on port ${PORT}`);
+            try {
+                await sequelize.sync();
+                console.log('[Server] Database synced successfully.');
+
+                // Seed Admin User
+                const admin = await User.findOne({ where: { username: 'admin' } });
+                if (!admin) {
+                    await User.create({ username: 'admin', password: 'admin' });
+                    console.log('[Server] Admin user created automatically (admin/admin).');
+                }
+
+            } catch (error) {
+                console.error('[Server] Failed to sync database:', error);
+            }
         });
     } catch (error) {
         console.error('[Server] Failed to start:', error);

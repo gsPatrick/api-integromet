@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+// Production API URL
 const api = axios.create({
-    baseURL: 'http://localhost:3000', // Backend URL
+    baseURL: 'https://n8n-apintegromat.r954jc.easypanel.host',
+    // baseURL: 'http://localhost:3000', // Dev URL
 });
 
 api.interceptors.request.use((config) => {
