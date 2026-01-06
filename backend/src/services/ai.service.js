@@ -7,13 +7,13 @@ class AiService {
     }
 
     /**
-     * Extracts order details from image and text using GPT-4o
-     * @param {string} imageUrl - URL of the product image
-     * @param {string} userText - User's message text
-     * @returns {Object} - Extracted JSON data
+     * Analyzes image and text to:
+     * 1. Determine if there's purchase intent
+     * 2. Extract order details if intent is detected
+     * @returns {Object} - { intencao_compra: boolean, ...orderDetails }
      */
-    async extractOrderDetails(imageUrl, userText) {
-        console.log('[AiService] Sending request to OpenAI...');
+    async analyzeMessage(imageUrl, userText) {
+        console.log('[AiService] Analyzing message with AI...');
 
         try {
             const payload = {
@@ -21,33 +21,43 @@ class AiService {
                 messages: [
                     {
                         role: "system",
-                        content: `Analise a imagem (que pode conter o preço visualmente) e o texto do usuário. 
-            O contexto é uma venda de roupas via WhatsApp.
-            Extraia os dados em estrito JSON: 
-            { 
-              "produto": string, 
-              "tamanho": string (ex: P, M, G, 38, 40), 
-              "cor": string, 
-              "preco_catalogo": number (ou null se ilegível), 
-              "quantidade": number (default 1 se não especificado)
-            }.
-            Se o texto do usuário especificar tamanho/cor, priorize o texto.
-            Retorne APENAS o JSON.`
+                        content: `Você é um assistente de vendas de uma loja de roupas via WhatsApp.
+Analise a imagem (que pode conter o preço visualmente) e o texto do usuário.
+
+TAREFA 1: Determine se há INTENÇÃO DE COMPRA. Exemplos de intenção:
+- "Quero esse", "2 desse", "Tem no M?", "Reserva pra mim", "Quanto é?"
+- Qualquer texto indicando interesse no produto
+- Se só tem imagem sem texto ou com texto genérico, considere como catálogo (sem intenção)
+
+TAREFA 2: Se houver intenção, extraia os detalhes do pedido.
+
+Retorne ESTRITAMENTE o JSON:
+{ 
+  "intencao_compra": boolean,
+  "produto": string (descrição do produto na imagem),
+  "tamanho": string ou null (P, M, G, 38, 40, etc),
+  "cor": string ou null,
+  "preco_catalogo": number ou null (preço visível na imagem),
+  "quantidade": number (default 1)
+}
+
+REGRAS:
+- Se o texto especificar tamanho/cor, priorize o texto sobre a imagem.
+- Se não houver intenção, ainda preencha produto/cor/preco se visíveis (útil para catálogo).
+- Retorne APENAS o JSON, nada mais.`
                     },
                     {
                         role: "user",
                         content: [
-                            { type: "text", text: userText || "Interesse no produto" },
+                            { type: "text", text: userText || "(sem texto)" },
                             {
                                 type: "image_url",
-                                image_url: {
-                                    url: imageUrl
-                                }
+                                image_url: { url: imageUrl }
                             }
                         ]
                     }
                 ],
-                max_tokens: 300,
+                max_tokens: 400,
                 response_format: { type: "json_object" }
             };
 
@@ -63,12 +73,12 @@ class AiService {
             );
 
             const content = response.data.choices[0].message.content;
-            console.log('[AiService] Response:', content);
+            console.log('[AiService] AI Response:', content);
             return JSON.parse(content);
 
         } catch (error) {
             console.error('[AiService] Error processing AI request:', error.response?.data || error.message);
-            throw new Error('Failed to extract order details via AI');
+            throw new Error('Failed to analyze message via AI');
         }
     }
 }

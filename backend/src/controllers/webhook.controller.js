@@ -8,7 +8,6 @@ const blingService = require('../services/bling.service');
 class WebhookController {
 
     constructor() {
-        // Bind methods to preserve `this` context when passed as callbacks
         this.handleWebhook = this.handleWebhook.bind(this);
         this.processMessagePayload = this.processMessagePayload.bind(this);
     }
@@ -18,7 +17,7 @@ class WebhookController {
             const payload = req.body;
             console.log('---------------------------------------------------');
 
-            // 1. DISCOVERY LOG (Vital for User Configuration)
+            // 1. DISCOVERY LOG
             const chatName = payload.chatName || payload.senderName || 'Desconhecido';
             const currentChatId = payload.chatId || payload.phone;
             console.log(`[NOVA MENSAGEM] Chat: "${chatName}" | ID: "${currentChatId}"`);
@@ -47,23 +46,19 @@ class WebhookController {
         }
     }
 
-    /**
-     * Core logic to process a message payload (from Webhook or Import).
-     * Returns a status string.
-     */
     async processMessagePayload(payload) {
         // ---------------------------------------------------------
-        // 1. INGESTION & LOGGING (Vital)
+        // 1. BASIC VALIDATION & LOGGING
         // ---------------------------------------------------------
         if (!payload.messageId || !payload.phone) {
-            console.warn('[Webhook/Import] Ignoring invalid payload (missing ID or phone)');
+            console.warn('[Webhook] Ignoring invalid payload (missing ID or phone)');
             return 'IGNORED';
         }
 
-        // Check if duplicate
+        // Duplicate check
         const existing = await MessageLog.findByPk(payload.messageId);
         if (existing) {
-            console.log('[Webhook/Import] Duplicate message ignored:', payload.messageId);
+            console.log('[Webhook] Duplicate message ignored:', payload.messageId);
             return 'DUPLICATE';
         }
 
@@ -77,79 +72,70 @@ class WebhookController {
             hasImage: !!payload.image,
             jsonPayload: payload
         });
-        console.log('[Webhook/Import] Message logged to DB.');
+        console.log('[Webhook] Message logged to DB.');
 
         // ---------------------------------------------------------
-        // 2. IDENTIFY PURCHASE INTENT
-        // ---------------------------------------------------------
-        // Check caption from image OR text message
-        const textMessage = payload.text ? payload.text.message.toLowerCase() :
-            (payload.image && payload.image.caption ? payload.image.caption.toLowerCase() : '');
-        const isReply = !!payload.referenceMessageId;
-        const keywords = ['quero', 'compra', 'pedido', 'reservar', 'tenho interesse', 'qual valor', 'desse', 'esse'];
-        const hasKeyword = keywords.some(k => textMessage.includes(k));
-
-        // Also consider: Image with caption as potential order
-        const hasImageWithCaption = payload.image && payload.image.caption;
-
-        if (!isReply && !hasKeyword && !hasImageWithCaption) {
-            console.log('[Webhook/Import] No purchase intent detected. Finished.');
-            return 'OK_NO_INTENT';
-        }
-
-        console.log('[Webhook/Import] Purchase intent detected! Starting processing...');
-
-        // ---------------------------------------------------------
-        // 3. CONTEXT RESOLUTION
+        // 2. CONTEXT RESOLUTION (Need Image to Send to AI)
         // ---------------------------------------------------------
         const targetImageUrl = await whatsappService.resolveImageContext(payload);
 
         if (!targetImageUrl) {
-            console.warn('[Webhook/Import] could not resolve an image context. Aborting order processing.');
-            return 'NO_IMAGE_CONTEXT';
+            console.log('[Webhook] No image context. Skipping AI analysis.');
+            return 'OK_NO_IMAGE';
         }
 
         // ---------------------------------------------------------
-        // 4. AI PROCESSING
+        // 3. AI-BASED INTENT DETECTION & EXTRACTION
         // ---------------------------------------------------------
-        const aiResult = await aiService.extractOrderDetails(targetImageUrl, textMessage);
+        const textMessage = payload.text ? payload.text.message :
+            (payload.image && payload.image.caption ? payload.image.caption : '');
+
+        console.log('[Webhook] Sending to AI for analysis...');
+        const aiResult = await aiService.analyzeMessage(targetImageUrl, textMessage);
+
+        // Check if AI detected purchase intent
+        if (!aiResult.intencao_compra) {
+            console.log('[Webhook] AI detected NO purchase intent. Finished.');
+            return 'OK_NO_INTENT';
+        }
+
+        console.log('[Webhook] AI detected PURCHASE INTENT! Creating order...');
 
         // ---------------------------------------------------------
-        // 5. CALCULATIONS & SAVING
+        // 4. CALCULATIONS & SAVING
         // ---------------------------------------------------------
         const catalogPrice = aiResult.preco_catalogo ? parseFloat(aiResult.preco_catalogo) : null;
         let sellPrice = null;
 
-        // Markup logic: Price * 1.35
         if (catalogPrice) {
             sellPrice = catalogPrice * 1.35;
             sellPrice = Math.round(sellPrice * 100) / 100;
         }
 
-        // Create Order
         const newOrder = await Order.create({
             customerName: payload.senderName || 'Unknown',
-            customerPhone: payload.participantPhone || payload.phone, // Use participant phone for groups
+            customerPhone: payload.participantPhone || payload.phone,
             productRaw: aiResult.produto,
             extractedSize: aiResult.tamanho,
             extractedColor: aiResult.cor,
             catalogPrice: catalogPrice,
             sellPrice: sellPrice,
-            imageUrl: targetImageUrl, // Save image URL for dashboard
+            imageUrl: targetImageUrl,
+            quantity: aiResult.quantidade || 1,
             status: catalogPrice ? 'PROCESSED' : 'PENDING'
         });
 
-        console.log(`[Webhook/Import] Order #${newOrder.id} created.`);
+        console.log(`[Webhook] Order #${newOrder.id} created.`);
 
         // ---------------------------------------------------------
-        // 6. INTEGRATIONS (Sheets & Bling)
+        // 5. INTEGRATIONS
         // ---------------------------------------------------------
         await sheetsService.appendOrder(newOrder);
 
         if (newOrder.status === 'PROCESSED') {
             await blingService.executeOrder(newOrder);
         } else {
-            console.log('[Webhook/Import] Skipping Bling integration (Order PENDING/Missing Price).');
+            console.log('[Webhook] Skipping Bling (Order PENDING - no price found).');
         }
 
         return 'ORDER_PROCESSED';
