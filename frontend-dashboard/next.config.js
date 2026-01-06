@@ -10,6 +10,14 @@ const nextConfig = {
                 protocol: 'https',
                 hostname: '**.whatsapp.net',
             },
+            {
+                protocol: 'https',
+                hostname: 'n8n-apintegromat.r954jc.easypanel.host',
+            },
+            {
+                protocol: 'https',
+                hostname: '**.backblazeb2.com',
+            },
         ],
     },
 };
