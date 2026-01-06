@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { LayoutDashboard, Radio, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Radio, Settings, LogOut, User } from 'lucide-react';
 
 export default function Sidebar() {
     const pathname = usePathname();
@@ -11,6 +11,7 @@ export default function Sidebar() {
 
     const navItems = [
         { href: '/dashboard', label: 'Pedidos', icon: LayoutDashboard },
+        { href: '/clientes', label: 'Clientes', icon: User },
         { href: '/historico', label: 'Histórico Live', icon: Radio },
         { href: '/configuracoes', label: 'Configurações', icon: Settings },
     ];
