@@ -26,17 +26,30 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 app.post('/webhook', webhookController.handleWebhook);
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
+const SettingsController = require('./controllers/settings.controller');
+const CustomerController = require('./controllers/customer.controller');
+const settingsController = new SettingsController();
+
 // Auth & Integration Routes
 app.get('/auth/bling/start', authController.startBlingAuth);
 app.get('/auth/bling/callback', authController.handleBlingCallback);
 app.get('/integrations/status', authController.getIntegrationStatus);
-app.delete('/auth/bling/disconnect', authController.disconnectBling); // New Disconnect Route
+app.delete('/auth/bling/disconnect', authController.disconnectBling);
 
 // Import/Tools Routes
-app.post('/import/history', importController.importHistory); // New Import Route
+app.post('/import/history', importController.importHistory);
 
 // Legacy Setup Route
 app.get('/setup/bling', blingController.handleSetup);
+
+// Settings Routes
+app.get('/settings', settingsController.getAll);
+app.put('/settings', settingsController.update);
+
+// Customer Routes
+app.get('/customers', CustomerController.listCustomers);
+app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
+app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
 
 // Protected Routes (Require x-api-token)
 app.use('/orders', authMiddleware);
@@ -44,7 +57,7 @@ app.use('/orders', authMiddleware);
 app.get('/orders', orderController.listOrders);
 app.get('/orders/:id', orderController.getOrder);
 app.put('/orders/:id', orderController.updateOrder);
-app.post('/orders/:id/sync-bling', orderController.syncOrderToBling);
+app.post('/orders/:id/sync-bling', orderController.syncOrderToBling.bind(orderController));
 
 // Start Server
 async function startServer() {

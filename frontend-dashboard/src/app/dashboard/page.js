@@ -143,6 +143,33 @@ export default function Dashboard() {
                                 </div>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent toggle
+                                            if (confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos deste cliente?`)) {
+                                                api.post(`/customers/${encodeURIComponent(group.customerPhone)}/sync`)
+                                                    .then(() => { alert('Sincronização em massa iniciada!'); fetchOrders(); })
+                                                    .catch(err => alert('Erro: ' + (err.response?.data?.error || err.message)));
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '8px 16px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            background: '#e67e22',
+                                            color: 'white',
+                                            fontWeight: 600,
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <RefreshCw size={14} />
+                                        Sinc. Tudo
+                                    </button>
+
                                     <div style={{ textAlign: 'right' }}>
                                         <span style={{ fontSize: '0.8rem', color: '#636e72', display: 'block' }}>Total Estimado</span>
                                         <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#00b894' }}>
