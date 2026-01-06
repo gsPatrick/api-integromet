@@ -11,14 +11,13 @@
 .imageContainer {
   position: relative;
   width: 100%;
-  aspect-ratio: 9 / 16;
-  /* Preserves portrait aspect ratio */
+  height: 180px;
   background: #f8fafc;
+  overflow: hidden;
 }
 
 .image {
   object-fit: contain;
-  /* Shows full image without cropping */
 }
 
 .content {
