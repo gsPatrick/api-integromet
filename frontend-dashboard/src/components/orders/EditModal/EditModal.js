@@ -17,6 +17,7 @@ export default function EditModal({ order, onClose, onSave }) {
         extractedSize: order.extractedSize || '',
         extractedColor: order.extractedColor || '',
         sellPrice: order.sellPrice || '',
+        quantity: order.quantity || 1,
     });
 
     const [loading, setLoading] = useState(false);
@@ -92,24 +93,33 @@ export default function EditModal({ order, onClose, onSave }) {
 
                         {/* WhatsApp Chat Simulation */}
                         <div style={{
-                            background: '#1a1a1a',
+                            backgroundColor: '#e5ddd5',
+                            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
                             borderRadius: '12px',
                             padding: '16px',
-                            flex: 1
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
                         }}>
                             <div style={{
                                 fontSize: '0.7rem',
-                                fontWeight: 600,
-                                color: '#22c55e',
+                                fontWeight: 700,
+                                color: '#075e54',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
                                 marginBottom: '12px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px'
+                                gap: '6px',
+                                background: 'rgba(255,255,255,0.9)',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                alignSelf: 'flex-start',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                             }}>
-                                <MessageCircle size={14} />
-                                Mensagem Original
+                                <MessageCircle size={12} />
+                                WhatsApp Original
                             </div>
 
                             {/* Message Bubble */}
@@ -118,7 +128,9 @@ export default function EditModal({ order, onClose, onSave }) {
                                 padding: '10px 14px',
                                 borderRadius: '8px 8px 0 8px',
                                 maxWidth: '90%',
-                                marginLeft: 'auto'
+                                marginLeft: 'auto',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                                position: 'relative'
                             }}>
                                 <div style={{
                                     fontSize: '0.75rem',
@@ -132,7 +144,7 @@ export default function EditModal({ order, onClose, onSave }) {
                                     <User size={12} />
                                     {order.customerName || 'Cliente'}
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: '#111' }}>
+                                <div style={{ fontSize: '0.9rem', color: '#111', lineHeight: '1.4' }}>
                                     {order.originalMessage || '(Mensagem não disponível)'}
                                 </div>
                                 <div style={{
@@ -180,10 +192,13 @@ export default function EditModal({ order, onClose, onSave }) {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
+                                    justifyContent: 'center',
+                                    transition: 'background 0.2s',
+                                    color: '#71717a'
                                 }}
+                                className="btn-ghost"
                             >
-                                <X size={16} color="#71717a" />
+                                <X size={16} />
                             </button>
                         </div>
 
@@ -249,10 +264,11 @@ export default function EditModal({ order, onClose, onSave }) {
                                         Quantidade
                                     </label>
                                     <input
-                                        value={order.quantity || 1}
-                                        disabled
+                                        name="quantity"
+                                        type="number"
+                                        value={formData.quantity}
+                                        onChange={handleChange}
                                         className="input"
-                                        style={{ background: '#f4f4f5' }}
                                     />
                                 </div>
                                 <div>
@@ -283,13 +299,13 @@ export default function EditModal({ order, onClose, onSave }) {
                             <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }} disabled={loading}>
                                 Cancelar
                             </button>
-                            <button onClick={() => handleSave(false)} className="btn btn-ghost" disabled={loading}>
+                            <button onClick={() => handleSave(false)} className="btn btn-secondary" style={{ flex: 1 }} disabled={loading}>
                                 <Save size={16} />
                                 Rascunho
                             </button>
-                            <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
+                            <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
                                 <Check size={16} />
-                                {loading ? 'Enviando...' : 'Sincronizar Bling'}
+                                {loading ? 'Enviando...' : 'Bling'}
                             </button>
                         </div>
                     </div>
