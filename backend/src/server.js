@@ -49,9 +49,9 @@ app.post('/orders/:id/sync-bling', orderController.syncOrderToBling);
 // Start Server
 async function startServer() {
     try {
-        // Sync Database
-        await sequelize.sync();
-        console.log('[Server] Database synced successfully.');
+        // Sync Database (force: true recreates tables - USE WITH CAUTION, deletes data!)
+        await sequelize.sync({ force: true });
+        console.log('[Server] Database synced (force: true - tables recreated).');
 
         // Seed Admin User
         try {
