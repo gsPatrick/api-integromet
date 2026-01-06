@@ -128,15 +128,16 @@ class WebhookController {
         console.log(`[Webhook] Order #${newOrder.id} created.`);
 
         // ---------------------------------------------------------
-        // 5. INTEGRATIONS
+        // 5. INTEGRATIONS (Sheets only - Bling is manual via Dashboard)
         // ---------------------------------------------------------
-        await sheetsService.appendOrder(newOrder);
-
-        if (newOrder.status === 'PROCESSED') {
-            await blingService.executeOrder(newOrder);
-        } else {
-            console.log('[Webhook] Skipping Bling (Order PENDING - no price found).');
+        try {
+            await sheetsService.appendOrder(newOrder);
+        } catch (sheetError) {
+            console.warn('[Webhook] Sheets integration failed (non-blocking):', sheetError.message);
         }
+
+        // NOTE: Bling sync removed from here. 
+        // User will approve and sync manually via Dashboard > "Sincronizar com Bling"
 
         return 'ORDER_PROCESSED';
     }
