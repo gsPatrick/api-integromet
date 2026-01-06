@@ -7,6 +7,12 @@ const blingService = require('../services/bling.service');
 
 class WebhookController {
 
+    constructor() {
+        // Bind methods to preserve `this` context when passed as callbacks
+        this.handleWebhook = this.handleWebhook.bind(this);
+        this.processMessagePayload = this.processMessagePayload.bind(this);
+    }
+
     async handleWebhook(req, res) {
         try {
             const payload = req.body;
@@ -49,13 +55,12 @@ class WebhookController {
         // ---------------------------------------------------------
         // 1. INGESTION & LOGGING (Vital)
         // ---------------------------------------------------------
-        // Ensure we have a message ID and phone, otherwise ignore
         if (!payload.messageId || !payload.phone) {
             console.warn('[Webhook/Import] Ignoring invalid payload (missing ID or phone)');
             return 'IGNORED';
         }
 
-        // Check if duplicate (Z-API might retry, or re-import)
+        // Check if duplicate
         const existing = await MessageLog.findByPk(payload.messageId);
         if (existing) {
             console.log('[Webhook/Import] Duplicate message ignored:', payload.messageId);
@@ -65,7 +70,7 @@ class WebhookController {
         // Save to MessageLog
         await MessageLog.create({
             messageId: payload.messageId,
-            chatId: payload.chatId || payload.phone, // fallback
+            chatId: payload.chatId || payload.phone,
             senderPhone: payload.phone,
             content: payload.text ? payload.text.message : (payload.image ? payload.image.caption : null),
             imageUrl: payload.image ? payload.image.imageUrl : null,
@@ -77,12 +82,17 @@ class WebhookController {
         // ---------------------------------------------------------
         // 2. IDENTIFY PURCHASE INTENT
         // ---------------------------------------------------------
-        const textMessage = payload.text ? payload.text.message.toLowerCase() : '';
+        // Check caption from image OR text message
+        const textMessage = payload.text ? payload.text.message.toLowerCase() :
+            (payload.image && payload.image.caption ? payload.image.caption.toLowerCase() : '');
         const isReply = !!payload.referenceMessageId;
-        const keywords = ['quero', 'compra', 'pedido', 'reservar', 'tenho interesse', 'qual valor'];
+        const keywords = ['quero', 'compra', 'pedido', 'reservar', 'tenho interesse', 'qual valor', 'desse', 'esse'];
         const hasKeyword = keywords.some(k => textMessage.includes(k));
 
-        if (!isReply && !hasKeyword) {
+        // Also consider: Image with caption as potential order
+        const hasImageWithCaption = payload.image && payload.image.caption;
+
+        if (!isReply && !hasKeyword && !hasImageWithCaption) {
             console.log('[Webhook/Import] No purchase intent detected. Finished.');
             return 'OK_NO_INTENT';
         }
@@ -113,19 +123,19 @@ class WebhookController {
         // Markup logic: Price * 1.35
         if (catalogPrice) {
             sellPrice = catalogPrice * 1.35;
-            // Round to 2 decimals
             sellPrice = Math.round(sellPrice * 100) / 100;
         }
 
         // Create Order
         const newOrder = await Order.create({
             customerName: payload.senderName || 'Unknown',
-            customerPhone: payload.phone,
+            customerPhone: payload.participantPhone || payload.phone, // Use participant phone for groups
             productRaw: aiResult.produto,
             extractedSize: aiResult.tamanho,
             extractedColor: aiResult.cor,
             catalogPrice: catalogPrice,
             sellPrice: sellPrice,
+            imageUrl: targetImageUrl, // Save image URL for dashboard
             status: catalogPrice ? 'PROCESSED' : 'PENDING'
         });
 
