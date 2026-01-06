@@ -16,33 +16,28 @@ class WhatsappService {
      * @returns {Object|null} - Message object or null
      */
     async getMessageById(phone, messageId) {
+        // Reuse getMessages logic
+        const messages = await this.getMessages(phone, 50);
+        if (!messages) return null;
+        return messages.find(msg => msg.messageId === messageId) || null;
+    }
+
+    /**
+     * Fetches recent messages from a chat.
+     */
+    async getMessages(phone, limit = 50) {
         try {
-            console.log(`[WhatsappService] Fetching message ${messageId} for phone ${phone}`);
+            console.log(`[WhatsappService] Fetching last ${limit} messages for ${phone}`);
             const response = await axios.get(
                 `${BASE_URL}/chat-messages/${phone}`,
                 {
-                    params: {
-                        amount: 50 // Fetch last 50 messages to find the specific one
-                    },
-                    headers: {
-                        'Client-Token': CLIENT_TOKEN
-                    }
+                    params: { amount: limit },
+                    headers: { 'Client-Token': CLIENT_TOKEN }
                 }
             );
-
-            const messages = response.data;
-            const foundMessage = messages.find(msg => msg.messageId === messageId);
-
-            if (foundMessage) {
-                console.log(`[WhatsappService] Message found: ${foundMessage.messageId}`);
-            } else {
-                console.warn(`[WhatsappService] Message ${messageId} not found in last 50 messages`);
-            }
-
-            return foundMessage || null;
-
+            return response.data;
         } catch (error) {
-            console.error('[WhatsappService] Error fetching message:', error.response?.data || error.message);
+            console.error('[WhatsappService] Error fetching messages:', error.response?.data || error.message);
             return null;
         }
     }
