@@ -130,37 +130,33 @@ class BlingService {
         try {
             const token = await this.getValidToken();
 
-            // 1. Identify Client
-            // We use the phone number as "CPF" placeholder if real CPF isn't known.
-            // Ideally, the AI should extract CPF if present, but let's assume valid CPF logic or use a generic one if allowed (Bling validates CPF).
-            // Since we often don't have CPF from WhatsApp, we might need a dummy or search by name?
-            // Doc says: GET /contatos?numeroDocumento={CPF}
+            // Try to find or create client
+            // Note: Bling requires valid CPF/CNPJ. Since WhatsApp doesn't provide this,
+            // we'll try to create a basic client with just name. If it fails, we proceed without client.
+            let clientId = null;
 
-            // FALLBACK STRATEGY: 
-            // Since we likely don't have the CPF from a simple photo reply, we'll try to use the phone digits.
-            // WARNING: Bling validates CPF strictly for NFe. If this is just for internal control, maybe it passes.
-            // For this implementation, we will try to find by customerPhone (stripping chars).
-            const doc = orderData.customerPhone.replace(/\D/g, '');
+            try {
+                // Try finding by phone
+                const phone = (orderData.customerPhone || '').replace(/\\D/g, '');
+                let client = await this._findClient(token, phone);
 
-            let client = await this._findClient(token, doc);
+                if (!client) {
+                    console.log(`[BlingService] Client not found. Creating with name only...`);
+                    client = await this._createClient(token, {
+                        nome: orderData.customerName || 'Cliente WhatsApp',
+                        telefone: phone
+                    });
+                }
 
-            if (!client) {
-                console.log(`[BlingService] Client not found for doc ${doc}. Creating...`);
-                client = await this._createClient(token, {
-                    nome: orderData.customerName,
-                    // If we don't have a real CPF, this creation might fail if Bling enforces valid CPF.
-                    // We will attempt with the phone number, but allow failure to be caught.
-                    cpfCnpj: doc,
-                    telefone: orderData.customerPhone
-                });
+                if (client && client.id) {
+                    clientId = client.id;
+                }
+            } catch (clientError) {
+                console.warn('[BlingService] Could not create client, proceeding without:', clientError.message);
             }
 
-            // 2. Create Order
-            if (client && client.id) {
-                await this._createSalesOrder(token, orderData, client.id);
-            } else {
-                throw new Error('Could not resolve Client ID for Bling Order');
-            }
+            // Create Order (with or without client reference)
+            await this._createSalesOrder(token, orderData, clientId);
 
         } catch (error) {
             console.error('[BlingService] executeOrder failed:', error.message);
@@ -189,13 +185,18 @@ class BlingService {
 
     async _createClient(token, data) {
         try {
+            // Bling requires: nome (required), others optional
+            // Avoiding CPF as it requires valid format which we don't have from WhatsApp
             const payload = {
-                nome: data.nome,
-                numeroDocumento: data.cpfCnpj,
-                tipo: data.cpfCnpj.length > 11 ? 'J' : 'F',
-                contribuinte: 9, // Não contribuinte
-                telefone: data.telefone
+                nome: data.nome || 'Cliente WhatsApp',
+                tipo: 'F', // Pessoa Física
+                contribuinte: 9 // Não contribuinte
             };
+
+            // Only add phone if it's a valid format
+            if (data.telefone && data.telefone.length >= 10) {
+                payload.telefone = data.telefone;
+            }
 
             const response = await axios.post(
                 `${this.baseUrl}/contatos`,
@@ -208,29 +209,34 @@ class BlingService {
                 }
             );
 
-            return response.data.data; // Usually returns the created object with ID
+            console.log('[BlingService] Client created:', response.data.data?.id);
+            return response.data.data;
         } catch (error) {
-            console.error('[BlingService] Create Client Error:', error.response?.data);
-            throw error;
+            console.error('[BlingService] Create Client Error:', error.response?.data || error.message);
+            return null; // Return null instead of throwing to allow order creation to continue
         }
     }
 
     async _createSalesOrder(token, orderData, clientId) {
         console.log('[BlingService] Creating order...');
+
         const payload = {
-            contato: { id: clientId },
             data: new Date().toISOString().split('T')[0],
             itens: [
                 {
-                    codigo: 'GENERICO', // Code is often required
+                    codigo: 'WAPP-' + (orderData.id || '0'),
                     descricao: orderData.productRaw || 'Produto WhatsApp',
-                    quantidade: 1,
+                    quantidade: orderData.quantity || 1,
                     valor: orderData.sellPrice || 0
                 }
             ],
-            // Payment installments are optional but good to have logic for later
-            observacoes: `Pedido Auto ID: ${orderData.id}. Tamanho: ${orderData.extractedSize}. Cor: ${orderData.extractedColor}`
+            observacoes: `Pedido WhatsApp #${orderData.id}. Tam: ${orderData.extractedSize || '-'}. Cor: ${orderData.extractedColor || '-'}. Tel: ${orderData.customerPhone}`
         };
+
+        // Only add client reference if we have a valid ID
+        if (clientId) {
+            payload.contato = { id: clientId };
+        }
 
         const response = await axios.post(
             `${this.baseUrl}/pedidos/vendas`,
