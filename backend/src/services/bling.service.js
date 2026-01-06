@@ -126,24 +126,27 @@ class BlingService {
      * 2. Find/Create Client
      * 3. Create Order
      */
-    async executeOrder(orderData) {
+    async executeOrder(ordersInput) {
         try {
             const token = await this.getValidToken();
 
-            // Try to find or create client
-            // Note: Bling requires valid CPF/CNPJ. Since WhatsApp doesn't provide this,
-            // we'll try to create a basic client with just name. If it fails, we proceed without client.
-            let clientId = null;
+            // Normalize to array
+            const orders = Array.isArray(ordersInput) ? ordersInput : [ordersInput];
+            if (orders.length === 0) return;
 
+            // Use the first order for customer info
+            const mainOrder = orders[0];
+
+            // Try to find or create client
+            let clientId = null;
             try {
-                // Try finding by phone
-                const phone = (orderData.customerPhone || '').replace(/\\D/g, '');
+                const phone = (mainOrder.customerPhone || '').replace(/\D/g, '');
                 let client = await this._findClient(token, phone);
 
                 if (!client) {
                     console.log(`[BlingService] Client not found. Creating with name only...`);
                     client = await this._createClient(token, {
-                        nome: orderData.customerName || 'Cliente WhatsApp',
+                        nome: mainOrder.customerName || 'Cliente WhatsApp',
                         telefone: phone
                     });
                 }
@@ -155,51 +158,25 @@ class BlingService {
                 console.warn('[BlingService] Could not create client, proceeding without:', clientError.message);
             }
 
-            // Create Order (with or without client reference)
-            await this._createSalesOrder(token, orderData, clientId);
-
-        } catch (error) {
-            console.error('[BlingService] executeOrder failed:', error.message);
-        }
-    }
-
-    async _findClient(token, doc) {
-        try {
-            const response = await axios.get(
-                `${this.baseUrl}/contatos`,
-                {
-                    params: { numeroDocumento: doc },
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }
-            );
-
-            if (response.data.data && response.data.data.length > 0) {
-                return response.data.data[0];
-            }
-            return null;
-        } catch (error) {
-            // 404 is normal if not found? Bling V3 usually returns empty data or 404.
-            return null;
-        }
-    }
-
-    async _createClient(token, data) {
-        try {
-            // Bling requires: nome (required), others optional
-            // Avoiding CPF as it requires valid format which we don't have from WhatsApp
+            // Construct payload with multiple items
             const payload = {
-                nome: data.nome || 'Cliente WhatsApp',
-                tipo: 'F', // Pessoa Física
-                contribuinte: 9 // Não contribuinte
+                data: new Date().toISOString().split('T')[0],
+                itens: orders.map(order => ({
+                    codigo: 'WAPP-' + (order.id || '0'),
+                    descricao: (order.productRaw || 'Produto WhatsApp') + ` (Cor: ${order.extractedColor || '-'})`,
+                    quantidade: order.quantity || 1,
+                    valor: order.sellPrice || 0,
+                    unidade: 'UN'
+                })),
+                observacoes: `Pedido via WhatsApp. IDs: ${orders.map(o => o.id).join(', ')}. Cliente: ${mainOrder.customerName}`
             };
 
-            // Only add phone if it's a valid format
-            if (data.telefone && data.telefone.length >= 10) {
-                payload.telefone = data.telefone;
+            if (clientId) {
+                payload.contato = { id: clientId };
             }
 
             const response = await axios.post(
-                `${this.baseUrl}/contatos`,
+                `${this.baseUrl}/pedidos/vendas`,
                 payload,
                 {
                     headers: {
@@ -209,48 +186,13 @@ class BlingService {
                 }
             );
 
-            console.log('[BlingService] Client created:', response.data.data?.id);
-            return response.data.data;
+            console.log('[BlingService] Order created successfully with items:', orders.length);
+            return response.data;
+
         } catch (error) {
-            console.error('[BlingService] Create Client Error:', error.response?.data || error.message);
-            return null; // Return null instead of throwing to allow order creation to continue
+            console.error('[BlingService] executeOrder failed:', error.response?.data || error.message);
+            throw error;
         }
-    }
-
-    async _createSalesOrder(token, orderData, clientId) {
-        console.log('[BlingService] Creating order...');
-
-        const payload = {
-            data: new Date().toISOString().split('T')[0],
-            itens: [
-                {
-                    codigo: 'WAPP-' + (orderData.id || '0'),
-                    descricao: orderData.productRaw || 'Produto WhatsApp',
-                    quantidade: orderData.quantity || 1,
-                    valor: orderData.sellPrice || 0
-                }
-            ],
-            observacoes: `Pedido WhatsApp #${orderData.id}. Tam: ${orderData.extractedSize || '-'}. Cor: ${orderData.extractedColor || '-'}. Tel: ${orderData.customerPhone}`
-        };
-
-        // Only add client reference if we have a valid ID
-        if (clientId) {
-            payload.contato = { id: clientId };
-        }
-
-        const response = await axios.post(
-            `${this.baseUrl}/pedidos/vendas`,
-            payload,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                }
-            }
-        );
-
-        console.log('[BlingService] Order created successfully:', response.data);
-        return response.data;
     }
 }
 

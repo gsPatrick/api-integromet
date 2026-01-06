@@ -88,23 +88,48 @@ class OrderController {
         try {
             const { id } = req.params;
             const order = await Order.findByPk(id);
+            const SettingsController = require('./settings.controller'); // Lazy load
 
             if (!order) {
                 return res.status(404).json({ error: 'Order not found' });
             }
 
-            // Re-trigger Bling service
-            // Note: This might throw if tokens are invalid, handled in try/catch or inside service
-            await blingService.executeOrder(order);
+            // Check if Grouping is Enabled
+            const groupOrders = await SettingsController.getValue('group_orders', false);
 
-            // Update status if successful (blingService logs errors but doesn't throw mostly)
-            // Ideally blingService.executeOrder should return status
+            let ordersToSync = [order];
 
-            // Let's assume success if no throw for now, or you might want to improve executeOrder to return result
-            order.status = 'PROCESSED';
-            await order.save();
+            if (groupOrders && order.customerPhone) {
+                // Find other PENDING orders for the same customer
+                const siblings = await Order.findAll({
+                    where: {
+                        customerPhone: order.customerPhone,
+                        status: 'PENDING',
+                        id: { [require('sequelize').Op.ne]: order.id } // Exclude current one
+                    }
+                });
 
-            res.json({ message: 'Sync triggered successfully', order });
+                if (siblings.length > 0) {
+                    ordersToSync = [...ordersToSync, ...siblings];
+                    console.log(`[Sync] Grouping enabled. Found ${siblings.length} siblings for phone ${order.customerPhone}`);
+                }
+            }
+
+            // Pass ARRAY of orders to service
+            // We need to update existing service to handle single order (wrap in array) or array
+            await blingService.executeOrder(ordersToSync);
+
+            // Update status for ALL synced orders
+            for (const o of ordersToSync) {
+                o.status = 'PROCESSED';
+                await o.save();
+            }
+
+            res.json({
+                message: 'Sync triggered successfully',
+                count: ordersToSync.length,
+                grouped: ordersToSync.length > 1
+            });
 
         } catch (error) {
             console.error('[OrderController] Sync failed:', error);
