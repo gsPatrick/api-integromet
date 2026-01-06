@@ -1,0 +1,120 @@
+/* [project]/Integromat/frontend-dashboard/src/components/orders/EditModal/EditModal.module.css [app-client] (css) */
+.EditModal-module__QIabGG__overlay {
+  z-index: 50;
+  background: #00000080;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: fixed;
+  inset: 0;
+}
+
+.EditModal-module__QIabGG__modal {
+  background: #fff;
+  border-radius: 8px;
+  flex-direction: column;
+  gap: 24px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  padding: 24px;
+  display: flex;
+  overflow-y: auto;
+}
+
+.EditModal-module__QIabGG__content {
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  display: grid;
+}
+
+@media (max-width: 768px) {
+  .EditModal-module__QIabGG__content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.EditModal-module__QIabGG__imageContainer {
+  background: #f3f4f6;
+  border-radius: 8px;
+  height: 400px;
+  position: relative;
+  overflow: hidden;
+}
+
+.EditModal-module__QIabGG__form {
+  flex-direction: column;
+  gap: 16px;
+  display: flex;
+}
+
+.EditModal-module__QIabGG__inputGroup {
+  flex-direction: column;
+  gap: 4px;
+  display: flex;
+}
+
+.EditModal-module__QIabGG__label {
+  color: #374151;
+  font-size: .875rem;
+  font-weight: 500;
+}
+
+.EditModal-module__QIabGG__input {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+
+.EditModal-module__QIabGG__actions {
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  display: flex;
+}
+
+.EditModal-module__QIabGG__button {
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: .95rem;
+  font-weight: 600;
+  transition: opacity .2s;
+}
+
+.EditModal-module__QIabGG__button:disabled {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.EditModal-module__QIabGG__cancel {
+  color: #374151;
+  background: #fff;
+  border: 1px solid #d1d5db;
+}
+
+.EditModal-module__QIabGG__save {
+  color: #1f2937;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.EditModal-module__QIabGG__save:hover {
+  background: #e5e7eb;
+}
+
+.EditModal-module__QIabGG__sync {
+  color: #fff;
+  background: #059669;
+  box-shadow: 0 1px 2px #0000001a;
+}
+
+.EditModal-module__QIabGG__sync:hover {
+  background: #047857;
+}
+
+/*# sourceMappingURL=5dbf3_src_components_orders_EditModal_EditModal_module_css_bad6b30c._.single.css.map*/

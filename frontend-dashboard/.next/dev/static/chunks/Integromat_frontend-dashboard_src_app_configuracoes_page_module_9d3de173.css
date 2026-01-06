@@ -1,0 +1,75 @@
+/* [project]/Integromat/frontend-dashboard/src/app/configuracoes/page.module.css [app-client] (css) */
+.page-module__eWXvDW__container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.page-module__eWXvDW__title {
+  color: #111827;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.page-module__eWXvDW__card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px #0000001a;
+}
+
+.page-module__eWXvDW__cardHeader {
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+}
+
+.page-module__eWXvDW__cardTitle {
+  color: #374151;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.page-module__eWXvDW__section {
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  display: flex;
+}
+
+.page-module__eWXvDW__statusLabel {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.page-module__eWXvDW__connected {
+  color: #059669;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  display: flex;
+}
+
+.page-module__eWXvDW__disconnected {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.page-module__eWXvDW__connectButton {
+  color: #fff;
+  background-color: #f59e0b;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color .2s;
+  display: inline-block;
+}
+
+.page-module__eWXvDW__connectButton:hover {
+  background-color: #d97706;
+}
+
+/*# sourceMappingURL=Integromat_frontend-dashboard_src_app_configuracoes_page_module_9d3de173.css.map*/

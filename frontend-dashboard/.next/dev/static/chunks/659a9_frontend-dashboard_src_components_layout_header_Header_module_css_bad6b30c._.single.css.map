@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/Integromat/frontend-dashboard/src/components/layout/header/Header.module.css"],"sourcesContent":[".header {\n    background: white;\n    border-bottom: 1px solid #e5e7eb;\n    padding: 1rem 2rem;\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n}\n\n.logo {\n    font-size: 1.25rem;\n    font-weight: 700;\n    color: #111827;\n}\n\n.user {\n    font-size: 0.875rem;\n    color: #4b5563;\n}"],"names":[],"mappings":"AAAA;;;;;;;;;AASA;;;;;;AAMA"}}]
+}
