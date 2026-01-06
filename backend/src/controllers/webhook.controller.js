@@ -124,6 +124,7 @@ class WebhookController {
             sellPrice: sellPrice,
             imageUrl: targetImageUrl, // Temporary - will be updated below
             quantity: aiResult.quantidade || 1,
+            originalMessage: textMessage, // Customer's original message
             status: catalogPrice ? 'PROCESSED' : 'PENDING'
         });
 

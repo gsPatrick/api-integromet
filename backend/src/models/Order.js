@@ -46,6 +46,10 @@ const Order = sequelize.define('Order', {
     quantity: {
         type: DataTypes.INTEGER,
         defaultValue: 1
+    },
+    originalMessage: {
+        type: DataTypes.TEXT,
+        allowNull: true
     }
 }, {
     tableName: 'orders',
