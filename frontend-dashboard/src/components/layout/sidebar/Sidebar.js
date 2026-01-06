@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { LayoutDashboard, Radio, Settings, LogOut } from 'lucide-react';
 
 export default function Sidebar() {
@@ -21,54 +22,62 @@ export default function Sidebar() {
 
     return (
         <aside style={{
-            width: '260px',
+            width: '280px',
             height: '100vh',
             position: 'fixed',
             left: 0,
             top: 0,
             background: 'white',
-            borderRight: '1px solid #e4e4e7',
+            borderRight: '1px solid rgba(0,0,0,0.05)',
             display: 'flex',
             flexDirection: 'column',
-            padding: '24px 16px'
+            padding: '32px 24px',
+            boxShadow: '4px 0 24px rgba(0,0,0,0.02)'
         }}>
             {/* Logo */}
             <div style={{
-                padding: '8px 12px',
-                marginBottom: '32px'
+                marginBottom: '48px',
+                textAlign: 'center'
             }}>
                 <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
+                    position: 'relative',
+                    width: '100px',
+                    height: '100px',
+                    margin: '0 auto 16px',
+                    filter: 'drop-shadow(0 8px 16px rgba(255, 159, 67, 0.2))'
                 }}>
-                    <div style={{
-                        width: '40px',
-                        height: '40px',
-                        background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontWeight: 700,
-                        fontSize: '1.25rem'
-                    }}>
-                        C
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 700, fontSize: '1.125rem', color: '#0a0a0a' }}>Coletivino</div>
-                        <div style={{ fontSize: '0.75rem', color: '#71717a' }}>Gestão de Pedidos</div>
-                    </div>
+                    <Image
+                        src="/logo.png"
+                        alt="Coletivino"
+                        fill
+                        style={{ objectFit: 'contain' }}
+                        priority
+                    />
+                </div>
+                <div style={{
+                    fontWeight: 800,
+                    fontSize: '1.25rem',
+                    color: '#2d3436',
+                    letterSpacing: '-0.02em'
+                }}>
+                    Coletivino
                 </div>
             </div>
 
             {/* Navigation */}
             <nav style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', padding: '0 12px' }}>
-                    Menu
+                <div style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#b2bec3',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    marginBottom: '16px',
+                    paddingLeft: '12px'
+                }}>
+                    Menu Principal
                 </div>
-                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {navItems.map(item => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -79,16 +88,27 @@ export default function Sidebar() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '12px',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    color: isActive ? '#2563eb' : '#52525b',
-                                    background: isActive ? '#eff6ff' : 'transparent',
-                                    fontWeight: isActive ? 600 : 500,
-                                    fontSize: '0.875rem',
-                                    transition: 'all 0.15s'
+                                    padding: '14px 16px',
+                                    borderRadius: '16px',
+                                    color: isActive ? '#d35400' : '#636e72',
+                                    background: isActive ? '#fff3e0' : 'transparent',
+                                    fontWeight: isActive ? 700 : 500,
+                                    fontSize: '0.95rem',
+                                    transition: 'all 0.2s',
+                                    position: 'relative'
                                 }}>
-                                    <Icon size={20} />
+                                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                                     {item.label}
+                                    {isActive && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            right: '16px',
+                                            width: '6px',
+                                            height: '6px',
+                                            borderRadius: '50%',
+                                            background: '#d35400'
+                                        }} />
+                                    )}
                                 </Link>
                             </li>
                         );
@@ -97,7 +117,7 @@ export default function Sidebar() {
             </nav>
 
             {/* Footer */}
-            <div style={{ borderTop: '1px solid #e4e4e7', paddingTop: '16px' }}>
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '24px' }}>
                 <button
                     onClick={handleLogout}
                     style={{
@@ -105,19 +125,27 @@ export default function Sidebar() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '12px',
-                        padding: '12px',
-                        borderRadius: '10px',
-                        color: '#71717a',
+                        padding: '14px 16px',
+                        borderRadius: '16px',
+                        color: '#636e72',
                         background: 'transparent',
                         border: 'none',
                         cursor: 'pointer',
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        transition: 'all 0.15s'
+                        fontSize: '0.95rem',
+                        fontWeight: 600,
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#ffeaa7';
+                        e.currentTarget.style.color = '#d63031';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#636e72';
                     }}
                 >
                     <LogOut size={20} />
-                    Sair
+                    Sair da Conta
                 </button>
             </div>
         </aside>

@@ -1,9 +1,9 @@
 /* ======================================
-   PREMIUM THEME - White + Black + Blue
+   COLETIVINO THEME - Vibrant & Cool
    ====================================== */
 
 /* Google Fonts - Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* Reset and Base */
 *,
@@ -15,35 +15,46 @@
 }
 
 :root {
-    /* Primary Colors */
-    --white: #ffffff;
-    --black: #0a0a0a;
-    --blue-primary: #2563eb;
-    --blue-light: #3b82f6;
-    --blue-dark: #1d4ed8;
+    /* Brand Colors from Logo */
+    --brand-orange: #ff9f43;
+    /* Main Background Orange */
+    --brand-brown: #8d4004;
+    /* Text Color */
+
+    /* Puzzle Colors (Accents) */
+    --accent-cyan: #0abde3;
+    --accent-green: #1dd1a1;
+    --accent-pink: #ff6b6b;
+    --accent-yellow: #feca57;
+
+    /* UI Colors */
+    --primary: var(--brand-orange);
+    --primary-hover: #fa8231;
+    --bg-page: #fff7ed;
+    /* Very light orange tint */
+    --bg-card: #ffffff;
+    --text-main: #2d3436;
+    --text-muted: #636e72;
 
     /* Grays */
-    --gray-50: #fafafa;
-    --gray-100: #f4f4f5;
-    --gray-200: #e4e4e7;
-    --gray-300: #d4d4d8;
-    --gray-400: #a1a1aa;
-    --gray-500: #71717a;
-    --gray-600: #52525b;
-    --gray-700: #3f3f46;
-    --gray-800: #27272a;
-    --gray-900: #18181b;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
 
     /* Semantic */
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --error: #ef4444;
+    --success: #10ac84;
+    --warning: #ff9f43;
+    --error: #ee5253;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(255, 159, 67, 0.15);
+    /* Orange tinted shadow */
+    --shadow-xl: 0 20px 25px -5px rgba(255, 159, 67, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 }
 
 html {
@@ -53,8 +64,8 @@ html {
 }
 
 body {
-    background: var(--gray-50);
-    color: var(--gray-900);
+    background: var(--bg-page);
+    color: var(--text-main);
     min-height: 100vh;
 }
 
@@ -65,39 +76,37 @@ h3,
 h4,
 h5,
 h6 {
-    font-weight: 600;
-    color: var(--black);
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
 }
 
 /* Links */
 a {
-    color: var(--blue-primary);
+    color: var(--brand-brown);
     text-decoration: none;
-    transition: color 0.2s;
+    font-weight: 600;
+    transition: opacity 0.2s;
 }
 
 a:hover {
-    color: var(--blue-dark);
+    opacity: 0.8;
 }
 
 /* ======================================
    CARD COMPONENT
    ====================================== */
 .card {
-    background: var(--white);
-    border-radius: 12px;
-    border: 1px solid var(--gray-200);
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s, transform 0.2s;
+    background: var(--bg-card);
+    border-radius: 20px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card:hover {
-    box-shadow: var(--shadow-md);
-}
-
-.card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
 }
 
 /* ======================================
@@ -108,10 +117,10 @@ a:hover {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 20px;
-    font-size: 0.875rem;
+    padding: 12px 24px;
+    font-size: 0.95rem;
     font-weight: 600;
-    border-radius: 8px;
+    border-radius: 12px;
     border: none;
     cursor: pointer;
     transition: all 0.2s;
@@ -121,46 +130,39 @@ a:hover {
 .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none !important;
 }
 
 .btn-primary {
-    background: var(--blue-primary);
-    color: var(--white);
+    background: linear-gradient(135deg, var(--brand-orange) 0%, #fa8231 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 159, 67, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: var(--blue-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 159, 67, 0.4);
 }
 
 .btn-secondary {
-    background: var(--white);
-    color: var(--gray-700);
-    border: 1px solid var(--gray-300);
+    background: white;
+    color: var(--text-main);
+    border: 1px solid var(--gray-200);
 }
 
 .btn-secondary:hover:not(:disabled) {
     background: var(--gray-50);
-    border-color: var(--gray-400);
-}
-
-.btn-success {
-    background: var(--success);
-    color: var(--white);
-}
-
-.btn-success:hover:not(:disabled) {
-    background: #16a34a;
+    border-color: var(--gray-300);
 }
 
 .btn-ghost {
     background: transparent;
-    color: var(--gray-600);
+    color: var(--text-muted);
 }
 
 .btn-ghost:hover:not(:disabled) {
-    background: var(--gray-100);
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--text-main);
 }
 
 /* ======================================
@@ -172,13 +174,14 @@ a:hover {
     gap: 4px;
     padding: 4px 10px;
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 600;
     border-radius: 9999px;
+    letter-spacing: 0.02em;
 }
 
 .badge-blue {
-    background: #dbeafe;
-    color: #1e40af;
+    background: #e0f2fe;
+    color: #0284c7;
 }
 
 .badge-green {
@@ -198,7 +201,12 @@ a:hover {
 
 .badge-gray {
     background: var(--gray-100);
-    color: var(--gray-700);
+    color: var(--gray-600);
+}
+
+.badge-orange {
+    background: #ffedd5;
+    color: #c2410c;
 }
 
 /* ======================================
@@ -206,20 +214,22 @@ a:hover {
    ====================================== */
 .input {
     width: 100%;
-    padding: 10px 14px;
-    font-size: 0.875rem;
-    border: 1px solid var(--gray-300);
-    border-radius: 8px;
-    background: var(--white);
-    color: var(--gray-900);
-    transition: border-color 0.2s, box-shadow 0.2s;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    border: 2px solid var(--gray-100);
+    border-radius: 12px;
+    background: var(--gray-50);
+    color: var(--text-main);
+    transition: all 0.2s;
     font-family: 'Inter', sans-serif;
+    font-weight: 500;
 }
 
 .input:focus {
     outline: none;
-    border-color: var(--blue-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: var(--brand-orange);
+    background: white;
+    box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.1);
 }
 
 .input::placeholder {
@@ -251,6 +261,20 @@ a:hover {
     }
 }
 
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+
+    100% {
+        transform: translateY(0px);
+    }
+}
+
 @keyframes pulse {
 
     0%,
@@ -274,20 +298,25 @@ a:hover {
 }
 
 .animate-fadeIn {
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .animate-slideUp {
-    animation: slideUp 0.4s ease-out;
+    animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-float {
+    animation: float 6s ease-in-out infinite;
 }
 
 /* ======================================
    GLASS EFFECT
    ====================================== */
 .glass {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 /* ======================================
@@ -296,8 +325,9 @@ a:hover {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
+    background: rgba(253, 224, 203, 0.4);
+    /* warm orange tint */
+    backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -306,11 +336,12 @@ a:hover {
 }
 
 .modal-content {
-    background: var(--white);
-    border-radius: 16px;
+    background: var(--bg-card);
+    border-radius: 24px;
     box-shadow: var(--shadow-xl);
     max-width: 90vw;
     max-height: 90vh;
     overflow-y: auto;
     animation: slideUp 0.3s ease-out;
+    border: 1px solid rgba(255, 255, 255, 0.8);
 }

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Sparkles, ShoppingBag } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 
 export default function LoginPage() {
     const [username, setUsername] = useState('');
@@ -13,8 +14,6 @@ export default function LoginPage() {
     const handleLogin = (e) => {
         e.preventDefault();
         setLoading(true);
-
-        // Simple auth for now
         setTimeout(() => {
             if (username === 'admin' && password === 'admin') {
                 localStorage.setItem('isLoggedIn', 'true');
@@ -23,16 +22,16 @@ export default function LoginPage() {
                 alert('Credenciais inválidas. Use admin/admin');
             }
             setLoading(false);
-        }, 500);
+        }, 800);
     };
 
     return (
         <div style={{
             minHeight: '100vh',
             display: 'flex',
-            background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)'
+            background: 'white'
         }}>
-            {/* Left Side - Branding */}
+            {/* Left Side - Brand & Gradient */}
             <div style={{
                 flex: 1,
                 display: 'flex',
@@ -41,90 +40,76 @@ export default function LoginPage() {
                 alignItems: 'center',
                 padding: '48px',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                background: 'linear-gradient(135deg, #ff9f43 0%, #ff6b6b 50%, #feca57 100%)'
             }}>
-                {/* Abstract Background Elements */}
+                {/* Glass Pattern Overlay */}
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: 0.1,
+                    backgroundImage: 'radial-gradient(#fff 2px, transparent 2px)',
+                    backgroundSize: '32px 32px'
+                }} />
+
+                {/* Floating Orbs */}
                 <div style={{
                     position: 'absolute',
                     width: '400px',
                     height: '400px',
                     borderRadius: '50%',
-                    background: 'radial-gradient(circle, rgba(37, 99, 235, 0.3) 0%, transparent 70%)',
-                    top: '20%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)',
+                    top: '10%',
                     left: '10%',
-                    filter: 'blur(60px)'
-                }} />
-                <div style={{
-                    position: 'absolute',
-                    width: '300px',
-                    height: '300px',
-                    borderRadius: '50%',
-                    background: 'radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%)',
-                    bottom: '20%',
-                    right: '20%',
-                    filter: 'blur(40px)'
+                    filter: 'blur(40px)',
+                    animation: 'float 8s ease-in-out infinite'
                 }} />
 
-                <div style={{ position: 'relative', textAlign: 'center', maxWidth: '400px' }}>
-                    {/* Logo */}
+                <div style={{
+                    position: 'relative',
+                    textAlign: 'center',
+                    maxWidth: '480px',
+                    padding: '40px',
+                    background: 'rgba(255, 255, 255, 0.15)',
+                    backdropFilter: 'blur(20px)',
+                    borderRadius: '32px',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)'
+                }}>
+                    {/* Logo Image */}
                     <div style={{
-                        width: '80px',
-                        height: '80px',
-                        background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                        borderRadius: '20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 32px',
-                        boxShadow: '0 20px 40px rgba(37, 99, 235, 0.3)'
+                        width: '140px',
+                        height: '140px',
+                        margin: '0 auto 24px',
+                        position: 'relative',
+                        filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.1))'
                     }}>
-                        <ShoppingBag size={40} color="white" />
+                        <Image
+                            src="/logo.png"
+                            alt="Coletivino Logo"
+                            fill
+                            style={{ objectFit: 'contain' }}
+                        />
                     </div>
 
                     <h1 style={{
-                        fontSize: '2.5rem',
-                        fontWeight: 700,
+                        fontSize: '3rem',
+                        fontWeight: 800,
                         color: 'white',
                         marginBottom: '16px',
-                        letterSpacing: '-0.02em'
+                        textShadow: '0 2px 4px rgba(0,0,0,0.1)'
                     }}>
                         Coletivino
                     </h1>
 
                     <p style={{
-                        fontSize: '1.125rem',
-                        color: 'rgba(255, 255, 255, 0.6)',
+                        fontSize: '1.25rem',
+                        color: 'rgba(255, 255, 255, 0.9)',
                         lineHeight: 1.6,
-                        marginBottom: '32px'
+                        fontWeight: 500
                     }}>
-                        Sistema inteligente de gestão de pedidos via WhatsApp com extração automática por IA
+                        Compras Coletivas Inteligentes
                     </p>
-
-                    {/* Features */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
-                        {['Extração automática de pedidos', 'Integração Bling ERP', 'Dashboard em tempo real'].map((feature, i) => (
-                            <div key={i} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                color: 'rgba(255, 255, 255, 0.8)',
-                                fontSize: '0.875rem'
-                            }}>
-                                <div style={{
-                                    width: '24px',
-                                    height: '24px',
-                                    borderRadius: '6px',
-                                    background: 'rgba(37, 99, 235, 0.2)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}>
-                                    <Sparkles size={14} color="#3b82f6" />
-                                </div>
-                                {feature}
-                            </div>
-                        ))}
-                    </div>
                 </div>
             </div>
 
@@ -134,32 +119,31 @@ export default function LoginPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'white',
-                padding: '48px'
+                padding: '48px',
+                background: '#fff'
             }}>
-                <div style={{ width: '100%', maxWidth: '400px' }}>
-                    <h2 style={{
-                        fontSize: '1.75rem',
-                        fontWeight: 700,
-                        color: '#0a0a0a',
-                        marginBottom: '8px'
-                    }}>
-                        Bem-vindo de volta
-                    </h2>
-                    <p style={{
-                        color: '#71717a',
-                        marginBottom: '32px'
-                    }}>
-                        Entre com suas credenciais para acessar o painel
-                    </p>
+                <div style={{ width: '100%', maxWidth: '420px' }}>
+                    <div style={{ marginBottom: '32px' }}>
+                        <h2 style={{
+                            fontSize: '2rem',
+                            fontWeight: 800,
+                            color: '#2d3436',
+                            marginBottom: '12px'
+                        }}>
+                            Bem-vindo! 👋
+                        </h2>
+                        <p style={{ color: '#636e72', fontSize: '1.1rem' }}>
+                            Entre para gerenciar seus pedidos
+                        </p>
+                    </div>
 
                     <form onSubmit={handleLogin}>
-                        <div style={{ marginBottom: '20px' }}>
+                        <div style={{ marginBottom: '24px' }}>
                             <label style={{
                                 display: 'block',
-                                fontSize: '0.875rem',
-                                fontWeight: 500,
-                                color: '#3f3f46',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: '#2d3436',
                                 marginBottom: '8px'
                             }}>
                                 Usuário
@@ -170,16 +154,16 @@ export default function LoginPage() {
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="admin"
                                 className="input"
-                                style={{ fontSize: '1rem', padding: '14px 16px' }}
+                                style={{ padding: '16px' }}
                             />
                         </div>
 
-                        <div style={{ marginBottom: '24px' }}>
+                        <div style={{ marginBottom: '32px' }}>
                             <label style={{
                                 display: 'block',
-                                fontSize: '0.875rem',
-                                fontWeight: 500,
-                                color: '#3f3f46',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: '#2d3436',
                                 marginBottom: '8px'
                             }}>
                                 Senha
@@ -190,7 +174,7 @@ export default function LoginPage() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
                                 className="input"
-                                style={{ fontSize: '1rem', padding: '14px 16px' }}
+                                style={{ padding: '16px' }}
                             />
                         </div>
 
@@ -199,40 +183,31 @@ export default function LoginPage() {
                             disabled={loading}
                             style={{
                                 width: '100%',
-                                padding: '14px 24px',
-                                fontSize: '1rem',
-                                fontWeight: 600,
+                                padding: '16px',
+                                fontSize: '1.1rem',
+                                fontWeight: 700,
                                 color: 'white',
-                                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                background: 'linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%)',
                                 border: 'none',
-                                borderRadius: '10px',
+                                borderRadius: '16px',
                                 cursor: loading ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: '8px',
-                                transition: 'all 0.2s',
-                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
-                                opacity: loading ? 0.7 : 1
+                                transition: 'all 0.3s',
+                                boxShadow: '0 10px 20px -5px rgba(255, 107, 107, 0.4)',
+                                opacity: loading ? 0.8 : 1
                             }}
                         >
                             {loading ? 'Entrando...' : (
                                 <>
-                                    Entrar
-                                    <ArrowRight size={18} />
+                                    Acessar Painel
+                                    <ArrowRight size={20} />
                                 </>
                             )}
                         </button>
                     </form>
-
-                    <p style={{
-                        textAlign: 'center',
-                        marginTop: '24px',
-                        fontSize: '0.75rem',
-                        color: '#a1a1aa'
-                    }}>
-                        Credenciais padrão: admin / admin
-                    </p>
                 </div>
             </div>
         </div>
