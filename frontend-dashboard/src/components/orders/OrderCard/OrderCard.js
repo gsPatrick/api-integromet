@@ -1,6 +1,17 @@
 import Image from 'next/image';
 import styles from './OrderCard.module.css';
 
+// API Base URL for images
+const API_URL = 'https://n8n-apintegromat.r954jc.easypanel.host';
+
+const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    // If it's already a full URL, return as-is
+    if (imageUrl.startsWith('http')) return imageUrl;
+    // Otherwise, prefix with API URL
+    return `${API_URL}${imageUrl}`;
+};
+
 export default function OrderCard({ order, onClick }) {
     const getStatusClass = (status) => {
         switch (status) {
@@ -10,12 +21,14 @@ export default function OrderCard({ order, onClick }) {
         }
     };
 
+    const imageUrl = getImageUrl(order.imageUrl);
+
     return (
         <div className={styles.card} onClick={() => onClick(order)}>
             <div className={styles.imageContainer}>
-                {order.imageUrl ? (
+                {imageUrl ? (
                     <Image
-                        src={order.imageUrl}
+                        src={imageUrl}
                         alt={order.productRaw || 'Produto'}
                         fill
                         className={styles.image}
