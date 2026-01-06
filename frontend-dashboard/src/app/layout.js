@@ -1,23 +1,33 @@
+'use client';
+
 import './globals.css';
+import { usePathname } from 'next/navigation';
 import Sidebar from '../components/layout/sidebar/Sidebar';
 
-export const metadata = {
-    title: 'AutoZap Dashboard',
-    description: 'Gestão de Pedidos WhatsApp',
-};
-
 export default function RootLayout({ children }) {
+    const pathname = usePathname();
+    const isLoginPage = pathname === '/login';
+
+    // Login page gets full screen without sidebar
+    if (isLoginPage) {
+        return (
+            <html lang="pt-BR">
+                <body>
+                    {children}
+                </body>
+            </html>
+        );
+    }
+
+    // All other pages get sidebar layout
     return (
         <html lang="pt-BR">
             <body>
                 <div style={{ display: 'flex', minHeight: '100vh' }}>
-                    {/* Sidebar Area */}
-                    <div style={{ width: '250px', flexShrink: 0 }}>
+                    <div style={{ width: '260px', flexShrink: 0 }}>
                         <Sidebar />
                     </div>
-
-                    {/* Main Content Area */}
-                    <main style={{ flex: 1, padding: '32px', backgroundColor: '#f8fafc', overflowX: 'hidden' }}>
+                    <main style={{ flex: 1, padding: '32px', backgroundColor: '#fafafa', overflowX: 'hidden' }}>
                         {children}
                     </main>
                 </div>

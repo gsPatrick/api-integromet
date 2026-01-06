@@ -3,7 +3,6 @@ import Image from 'next/image';
 import api from '../../../services/api';
 import styles from './EditModal.module.css';
 
-// API Base URL for images
 const API_URL = 'https://n8n-apintegromat.r954jc.easypanel.host';
 
 const getImageUrl = (imageUrl) => {
@@ -31,14 +30,12 @@ export default function EditModal({ order, onClose, onSave }) {
         setLoading(true);
         try {
             await api.put(`/orders/${order.id}`, formData);
-
             if (sync) {
                 await api.post(`/orders/${order.id}/sync-bling`);
                 alert('Pedido salvo e enviado para o Bling!');
             } else {
                 alert('Dados salvos localmente!');
             }
-
             onSave();
         } catch (error) {
             console.error('Error saving:', error);
@@ -49,26 +46,30 @@ export default function EditModal({ order, onClose, onSave }) {
     };
 
     return (
-        <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>Editar Pedido #{order.id}</h2>
-                    <button
-                        onClick={onClose}
-                        style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#6b7280' }}
-                    >
-                        ×
-                    </button>
-                </div>
-
-                <div className={styles.content}>
-                    {/* Left: Product Image + WhatsApp Chat */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
+        <div className="modal-overlay" onClick={onClose}>
+            <div
+                className="modal-content animate-slideUp"
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: '900px', padding: 0, overflow: 'hidden' }}
+            >
+                <div style={{ display: 'flex' }}>
+                    {/* Left: Image + Chat */}
+                    <div style={{
+                        width: '400px',
+                        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)',
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '20px'
+                    }}>
                         {/* Product Image */}
-                        <div className={styles.imageContainer}>
+                        <div style={{
+                            position: 'relative',
+                            height: '280px',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            background: '#27272a'
+                        }}>
                             {imageUrl ? (
                                 <Image
                                     src={imageUrl}
@@ -77,109 +78,207 @@ export default function EditModal({ order, onClose, onSave }) {
                                     style={{ objectFit: 'contain' }}
                                 />
                             ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: '100%',
+                                    color: '#71717a'
+                                }}>
                                     Sem imagem
                                 </div>
                             )}
                         </div>
 
-                        {/* WhatsApp Chat Preview */}
+                        {/* WhatsApp Chat Simulation */}
                         <div style={{
-                            background: '#e5ddd5',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            backgroundImage: 'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAGElEQVQYV2NkIBIwEqmOYVQh3pBhWCoEAKXnAgEsLWiDAAAAAElFTkSuQmCC")'
+                            background: '#1a1a1a',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            flex: 1
                         }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#075e54', marginBottom: '8px' }}>
-                                💬 Mensagem Original
+                            <div style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                color: '#22c55e',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}>
+                                <div style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%' }} />
+                                WhatsApp Original
                             </div>
 
                             {/* Message Bubble */}
                             <div style={{
                                 background: '#dcf8c6',
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                maxWidth: '85%',
-                                marginLeft: 'auto',
-                                boxShadow: '0 1px 1px rgba(0,0,0,0.1)'
+                                padding: '10px 14px',
+                                borderRadius: '8px 8px 0 8px',
+                                maxWidth: '90%',
+                                marginLeft: 'auto'
                             }}>
-                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#128c7e', marginBottom: '2px' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#128c7e', marginBottom: '4px' }}>
                                     {order.customerName || 'Cliente'}
                                 </div>
                                 <div style={{ fontSize: '0.9rem', color: '#111' }}>
                                     {order.originalMessage || '(Mensagem não disponível)'}
                                 </div>
-                                <div style={{ fontSize: '0.65rem', color: '#667781', textAlign: 'right', marginTop: '4px' }}>
+                                <div style={{
+                                    fontSize: '0.65rem',
+                                    color: '#667781',
+                                    textAlign: 'right',
+                                    marginTop: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end',
+                                    gap: '4px'
+                                }}>
                                     {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    <span style={{ color: '#53bdeb' }}>✓✓</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Right: Form */}
-                    <div className={styles.form}>
-                        <div className={styles.inputGroup}>
-                            <label className={styles.label}>Produto (IA)</label>
-                            <input
-                                name="productRaw"
-                                value={formData.productRaw}
-                                onChange={handleChange}
-                                className={styles.input}
-                            />
+                    <div style={{ flex: 1, padding: '32px', background: 'white' }}>
+                        {/* Header */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '24px'
+                        }}>
+                            <div>
+                                <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0a0a0a', marginBottom: '4px' }}>
+                                    Pedido #{order.id}
+                                </h2>
+                                <p style={{ color: '#71717a', fontSize: '0.875rem' }}>
+                                    {order.customerPhone}
+                                </p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e4e4e7',
+                                    background: 'white',
+                                    cursor: 'pointer',
+                                    fontSize: '1.25rem',
+                                    color: '#71717a',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                ×
+                            </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                            <div className={styles.inputGroup}>
-                                <label className={styles.label}>Tamanho</label>
+                        {/* AI Badge */}
+                        <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: '#eff6ff',
+                            color: '#2563eb',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            marginBottom: '24px'
+                        }}>
+                            ✨ Extraído por IA
+                        </div>
+
+                        {/* Form Fields */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                    Produto
+                                </label>
                                 <input
-                                    name="extractedSize"
-                                    value={formData.extractedSize}
+                                    name="productRaw"
+                                    value={formData.productRaw}
                                     onChange={handleChange}
-                                    className={styles.input}
+                                    className="input"
                                 />
                             </div>
-                            <div className={styles.inputGroup}>
-                                <label className={styles.label}>Cor</label>
-                                <input
-                                    name="extractedColor"
-                                    value={formData.extractedColor}
-                                    onChange={handleChange}
-                                    className={styles.input}
-                                />
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                        Tamanho
+                                    </label>
+                                    <input
+                                        name="extractedSize"
+                                        value={formData.extractedSize}
+                                        onChange={handleChange}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                        Cor
+                                    </label>
+                                    <input
+                                        name="extractedColor"
+                                        value={formData.extractedColor}
+                                        onChange={handleChange}
+                                        className="input"
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                        Quantidade
+                                    </label>
+                                    <input
+                                        value={order.quantity || 1}
+                                        disabled
+                                        className="input"
+                                        style={{ background: '#f4f4f5' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                        Preço de Venda (R$)
+                                    </label>
+                                    <input
+                                        name="sellPrice"
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.sellPrice}
+                                        onChange={handleChange}
+                                        className="input"
+                                        style={{ fontWeight: 600, fontSize: '1rem' }}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                            <div className={styles.inputGroup}>
-                                <label className={styles.label}>Quantidade</label>
-                                <input
-                                    value={order.quantity || 1}
-                                    disabled
-                                    className={styles.input}
-                                    style={{ background: '#f3f4f6' }}
-                                />
-                            </div>
-                            <div className={styles.inputGroup}>
-                                <label className={styles.label}>Preço de Venda (R$)</label>
-                                <input
-                                    name="sellPrice"
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.sellPrice}
-                                    onChange={handleChange}
-                                    className={styles.input}
-                                />
-                            </div>
-                        </div>
-
-                        <div className={styles.actions}>
-                            <button onClick={onClose} className={`${styles.button} ${styles.cancel}`} disabled={loading}>
+                        {/* Actions */}
+                        <div style={{
+                            display: 'flex',
+                            gap: '12px',
+                            marginTop: '32px',
+                            paddingTop: '24px',
+                            borderTop: '1px solid #e4e4e7'
+                        }}>
+                            <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }} disabled={loading}>
                                 Cancelar
                             </button>
-                            <button onClick={() => handleSave(false)} className={`${styles.button} ${styles.save}`} disabled={loading}>
+                            <button onClick={() => handleSave(false)} className="btn btn-ghost" disabled={loading}>
                                 Salvar Rascunho
                             </button>
-                            <button onClick={() => handleSave(true)} className={`${styles.button} ${styles.sync}`} disabled={loading}>
+                            <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
                                 {loading ? 'Enviando...' : '✅ Sincronizar Bling'}
                             </button>
                         </div>
