@@ -16,6 +16,7 @@ export default function EditModal({ order, onClose, onSave }) {
         productRaw: order.productRaw || '',
         extractedSize: order.extractedSize || '',
         extractedColor: order.extractedColor || '',
+        extractedColorCode: order.extractedColorCode || '',
         sellPrice: order.sellPrice || '',
         quantity: order.quantity || 1,
     });
@@ -296,7 +297,7 @@ export default function EditModal({ order, onClose, onSave }) {
                                         />
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                                         <div>
                                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
                                                 Tamanho
@@ -319,7 +320,21 @@ export default function EditModal({ order, onClose, onSave }) {
                                                 className="input"
                                             />
                                         </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#3f3f46', marginBottom: '8px' }}>
+                                                Cód. Cor
+                                            </label>
+                                            <input
+                                                name="extractedColorCode"
+                                                value={formData.extractedColorCode}
+                                                onChange={handleChange}
+                                                className="input"
+                                                placeholder="Ex: 120722"
+                                            />
+                                        </div>
                                     </div>
+
+
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                         <div>
