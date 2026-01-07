@@ -55,7 +55,6 @@ app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
 // Catalog Routes
 const catalogController = require('./controllers/catalog.controller');
 const multer = require('multer');
-const path = require('path');
 
 // Configure multer for PDF uploads
 const pdfStorage = multer.diskStorage({
