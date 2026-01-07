@@ -63,7 +63,9 @@ class OrderController {
             if (updates.productRaw !== undefined) allowedUpdates.productRaw = updates.productRaw;
             if (updates.extractedSize !== undefined) allowedUpdates.extractedSize = updates.extractedSize;
             if (updates.extractedColor !== undefined) allowedUpdates.extractedColor = updates.extractedColor;
+            if (updates.extractedColorCode !== undefined) allowedUpdates.extractedColorCode = updates.extractedColorCode;
             if (updates.sellPrice !== undefined) allowedUpdates.sellPrice = updates.sellPrice;
+            if (updates.quantity !== undefined) allowedUpdates.quantity = updates.quantity;
 
             const [updated] = await Order.update(allowedUpdates, { where: { id } });
 

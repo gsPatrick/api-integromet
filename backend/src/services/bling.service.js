@@ -198,6 +198,7 @@ class BlingService {
                 payload.contato = { id: clientId };
             }
 
+            await this._sleep(350); // Rate limit protection
             const response = await axios.post(
                 `${this.baseUrl}/pedidos/vendas`,
                 payload,
@@ -233,6 +234,7 @@ class BlingService {
         console.log(`[BlingService] Trying ${variations.length} phone variations:`, variations);
 
         for (const variation of variations) {
+            await this._sleep(350); // Rate limit protection
             try {
                 const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${variation}`, {
                     headers: { Authorization: `Bearer ${token}` }
@@ -304,7 +306,13 @@ class BlingService {
         return Array.from(variations);
     }
 
+    async _sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     async _createClient(token, clientData) {
+        await this._sleep(350); // Rate limit protection
+
         const payload = {
             nome: clientData.nome || 'Cliente WhatsApp',
             tipo: 'F', // Fisica
@@ -312,7 +320,13 @@ class BlingService {
         };
 
         if (clientData.telefone) {
-            payload.celular = clientData.telefone;
+            // Bling expects DDD + Number (10 or 11 digits). No Country Code.
+            // If we have 12 or 13 chars and starts with 55, strip.
+            let phone = clientData.telefone.replace(/\D/g, '');
+            if (phone.startsWith('55') && phone.length >= 12) {
+                phone = phone.substring(2);
+            }
+            payload.celular = phone;
         }
 
         try {
@@ -324,7 +338,8 @@ class BlingService {
             return response.data.data;
         } catch (error) {
             console.error('[BlingService] Failed to create client:', JSON.stringify(error.response?.data || error.message, null, 2));
-            throw error;
+            // Don't throw, just return null so we can proceed without client binding if needed
+            return null;
         }
     }
 }
