@@ -30,7 +30,14 @@ class CatalogAssistantService {
 
         // 1. Create Vector Store
         if (!this.vectorStoreId) {
-            const vectorStore = await this.openai.beta.vectorStores.create({
+            // FIX: Check where vectorStores lives (root or beta)
+            const vsApi = this.openai.beta.vectorStores || this.openai.vectorStores;
+
+            if (!vsApi) {
+                throw new Error('OpenAI Client does not support Vector Stores (neither in beta nor root)');
+            }
+
+            const vectorStore = await vsApi.create({
                 name: "Catalogos de Vendas"
             });
             this.vectorStoreId = vectorStore.id;
@@ -83,7 +90,15 @@ class CatalogAssistantService {
         });
 
         // Add to Vector Store
-        await this.openai.beta.vectorStores.files.create(
+        // FIX: Check where vectorStores lives
+        const vsFilesApi = (this.openai.beta.vectorStores && this.openai.beta.vectorStores.files) ||
+            (this.openai.vectorStores && this.openai.vectorStores.files);
+
+        if (!vsFilesApi) {
+            throw new Error('OpenAI Client does not support Vector Store Files');
+        }
+
+        await vsFilesApi.create(
             this.vectorStoreId,
             {
                 file_id: file.id
