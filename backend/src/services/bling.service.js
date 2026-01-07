@@ -145,8 +145,9 @@ class BlingService {
             let clientId = null;
             try {
                 const phone = (mainOrder.customerPhone || '').replace(/\D/g, '');
-                console.log(`[BlingService] Searching for client with phone: ${phone}`);
-                let client = await this._findClient(token, phone);
+                const name = mainOrder.customerName || '';
+                console.log(`[BlingService] Searching for client: Name="${name}", Phone="${phone}"`);
+                let client = await this._findClient(token, name, phone);
 
                 if (client) {
                     console.log(`[BlingService] Found existing client: ID ${client.id}, Name: ${client.nome}`);
@@ -259,33 +260,64 @@ class BlingService {
     // CLIENT METHODS
     // =========================================================================
 
-    async _findClient(token, phone) {
-        if (!phone) return null;
+    async _findClient(token, name, phone) {
+        if (!name && !phone) return null;
 
-        // Clean the phone number - remove all non-digits
-        const cleanPhone = phone.replace(/\D/g, '');
+        // Clean target phone for comparison
+        const targetPhone = phone ? phone.replace(/\D/g, '') : '';
 
-        // Generate all possible variations
-        const variations = this._generatePhoneVariations(cleanPhone);
-        console.log(`[BlingService] Trying ${variations.length} phone variations:`, variations);
-
-        for (const variation of variations) {
-            await this._sleep(350); // Rate limit protection
+        // 1. Search by Name (primary strategy since phone search is unreliable in 'pesquisa')
+        if (name) {
+            await this._sleep(350);
             try {
-                const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${variation}`, {
+                console.log(`[BlingService] Searching client by name: "${name}"`);
+                const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${encodeURIComponent(name)}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
-                if (response.data.data && response.data.data.length > 0) {
-                    console.log(`[BlingService] ✓ Found client with variation: ${variation}`);
-                    return response.data.data[0];
+                if (response.data.data && Array.isArray(response.data.data)) {
+                    // Client-side filtering by phone
+                    const match = response.data.data.find(client => {
+                        const clientPhone = (client.celular || '').replace(/\D/g, '');
+                        // Check if phone matches (allowing partial match if one is 11 and other is 10 chars, etc, best effort)
+                        // Or strict equality of sanitized numbers
+                        return clientPhone === targetPhone ||
+                            (targetPhone && clientPhone.endsWith(targetPhone)) ||
+                            (clientPhone && targetPhone.endsWith(clientPhone));
+                    });
+
+                    if (match) {
+                        console.log(`[BlingService] ✓ Found client by name "${name}" with matching phone: ${match.celular}`);
+                        return match;
+                    }
                 }
             } catch (error) {
-                // Continue to next variation
+                console.warn('[BlingService] Name search failed or empty:', error.message);
             }
         }
 
-        console.log(`[BlingService] ✗ No client found with any phone variation`);
+        // 2. Fallback: Search by Phone (if name strategy failed, though we know 'pesquisa' by phone is weak)
+        // We keep this just in case Bling improves indexing or for specific number formats
+        if (phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            const variations = this._generatePhoneVariations(cleanPhone);
+
+            for (const variation of variations) {
+                await this._sleep(350);
+                try {
+                    const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${variation}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (response.data.data && response.data.data.length > 0) {
+                        console.log(`[BlingService] ✓ Found client with variation: ${variation}`);
+                        return response.data.data[0];
+                    }
+                } catch (e) { }
+            }
+        }
+
+        console.log(`[BlingService] ✗ No existing client found for "${name}" / "${phone}"`);
         return null;
     }
 
