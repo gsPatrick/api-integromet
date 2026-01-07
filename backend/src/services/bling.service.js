@@ -206,7 +206,7 @@ class BlingService {
             return response.data;
 
         } catch (error) {
-            console.error('[BlingService] executeOrder failed:', error.response?.data || error.message);
+            console.error('[BlingService] executeOrder failed:', JSON.stringify(error.response?.data || error.message, null, 2));
             throw error;
         }
     }
@@ -308,12 +308,17 @@ class BlingService {
             payload.celular = clientData.telefone;
         }
 
-        console.log('[BlingService] Creating client:', payload);
-        const response = await axios.post(`${this.baseUrl}/contatos`, payload, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+            console.log('[BlingService] Creating client:', payload);
+            const response = await axios.post(`${this.baseUrl}/contatos`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        return response.data.data;
+            return response.data.data;
+        } catch (error) {
+            console.error('[BlingService] Failed to create client:', JSON.stringify(error.response?.data || error.message, null, 2));
+            throw error;
+        }
     }
 }
 
