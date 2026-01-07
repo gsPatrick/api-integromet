@@ -46,7 +46,6 @@ app.get('/setup/bling', blingController.handleSetup);
 // Settings Routes
 app.get('/settings', settingsController.getAll);
 app.put('/settings', settingsController.update);
-
 // Customer Routes
 app.get('/customers', CustomerController.listCustomers);
 app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
@@ -54,9 +53,41 @@ app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
 
 // Catalog Routes
 const catalogController = require('./controllers/catalog.controller');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for PDF uploads
+const pdfStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../public/uploads/catalogs');
+        const fs = require('fs');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'catalog-' + uniqueSuffix + '.pdf');
+    }
+});
+const pdfUpload = multer({
+    storage: pdfStorage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PDF files are allowed'), false);
+        }
+    },
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB max
+});
+
 app.get('/catalog', catalogController.listProducts);
+app.get('/catalog/status', catalogController.getStatus);
 app.post('/catalog/product', catalogController.addProduct);
 app.post('/catalog/import', catalogController.bulkImport);
+app.post('/catalog/upload-pdf', pdfUpload.single('pdf'), catalogController.uploadPdf);
 app.get('/catalog/search/:code', catalogController.searchByCode);
 app.delete('/catalog/reset', catalogController.resetCatalog);
 

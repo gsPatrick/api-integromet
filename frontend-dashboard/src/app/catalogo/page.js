@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BookOpen, Plus, Upload, Search, Trash2, Save, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { BookOpen, Plus, Upload, Search, Trash2, Save, Loader2, AlertCircle, FileText, CheckCircle } from 'lucide-react';
 import api from '../../services/api';
 
 export default function CatalogPage() {
@@ -10,6 +10,10 @@ export default function CatalogPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [uploadingPdf, setUploadingPdf] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState('');
+    const [catalogStatus, setCatalogStatus] = useState({ totalProducts: 0, catalogs: [] });
+    const fileInputRef = useRef(null);
     const [newProduct, setNewProduct] = useState({
         code: '',
         name: '',
@@ -22,6 +26,7 @@ export default function CatalogPage() {
 
     useEffect(() => {
         fetchProducts();
+        fetchStatus();
     }, []);
 
     const fetchProducts = async () => {
@@ -32,6 +37,56 @@ export default function CatalogPage() {
             console.error('Error fetching catalog:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchStatus = async () => {
+        try {
+            const res = await api.get('/catalog/status');
+            setCatalogStatus(res.data);
+        } catch (error) {
+            console.error('Error fetching status:', error);
+        }
+    };
+
+    const handlePdfUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (file.type !== 'application/pdf') {
+            alert('Por favor, selecione um arquivo PDF.');
+            return;
+        }
+
+        const catalogName = prompt('Nome do catálogo:', file.name.replace('.pdf', ''));
+        if (!catalogName) return;
+
+        setUploadingPdf(true);
+        setUploadProgress('Enviando PDF...');
+
+        try {
+            const formData = new FormData();
+            formData.append('pdf', file);
+            formData.append('catalogName', catalogName);
+
+            setUploadProgress('Processando páginas com IA... Isso pode demorar alguns minutos.');
+
+            const res = await api.post('/catalog/upload-pdf', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 600000 // 10 minutes timeout
+            });
+
+            setUploadProgress('');
+            alert(`✅ Catálogo processado!\n\nPáginas: ${res.data.pagesProcessed}\nProdutos encontrados: ${res.data.productsFound}`);
+            fetchProducts();
+            fetchStatus();
+        } catch (error) {
+            console.error('PDF upload error:', error);
+            alert('Erro ao processar PDF: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setUploadingPdf(false);
+            setUploadProgress('');
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -57,33 +112,6 @@ export default function CatalogPage() {
         }
     };
 
-    const handleBulkImport = async () => {
-        const jsonInput = prompt('Cole o JSON com os produtos:\n\nFormato esperado:\n[\n  {"code": "46586", "name": "Conjunto...", "price_1_3": 141.61, "price_4_8": 161.86}\n]');
-
-        if (!jsonInput) return;
-
-        try {
-            const products = JSON.parse(jsonInput);
-            setImporting(true);
-
-            const res = await api.post('/catalog/import', {
-                products,
-                catalogName: prompt('Nome do catálogo (ex: Verdi Inverno 2026):') || 'Catálogo Geral'
-            });
-
-            alert(`Importação concluída!\nCriados: ${res.data.created}\nAtualizados: ${res.data.updated}`);
-            fetchProducts();
-        } catch (error) {
-            if (error instanceof SyntaxError) {
-                alert('JSON inválido! Verifique o formato.');
-            } else {
-                alert('Erro na importação: ' + (error.response?.data?.error || error.message));
-            }
-        } finally {
-            setImporting(false);
-        }
-    };
-
     const handleResetCatalog = async () => {
         if (!confirm('Tem certeza que deseja apagar TODOS os produtos do catálogo?')) return;
 
@@ -91,6 +119,7 @@ export default function CatalogPage() {
             await api.delete('/catalog/reset');
             alert('Catálogo resetado!');
             fetchProducts();
+            fetchStatus();
         } catch (error) {
             alert('Erro ao resetar: ' + error.message);
         }
@@ -112,6 +141,66 @@ export default function CatalogPage() {
                     <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Catálogo de Produtos</h1>
                     <p style={{ color: '#636e72' }}>Importe e gerencie produtos para referência de preços</p>
                 </div>
+            </div>
+
+            {/* Status Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#4caf50' }}>{catalogStatus.totalProducts}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#636e72' }}>Produtos no Catálogo</div>
+                </div>
+                <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2196f3' }}>{catalogStatus.catalogs?.length || 0}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#636e72' }}>Catálogos Importados</div>
+                </div>
+            </div>
+
+            {/* PDF Upload Section */}
+            <div className="card" style={{ padding: '24px', marginBottom: '24px', background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <FileText size={32} color="#ff9800" />
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{ marginBottom: '4px' }}>Importar Catálogo PDF</h3>
+                        <p style={{ fontSize: '0.9rem', color: '#795548' }}>
+                            Faça upload do PDF do catálogo. A IA irá extrair automaticamente todos os produtos com códigos e preços.
+                        </p>
+                    </div>
+                    <div>
+                        <input
+                            type="file"
+                            accept=".pdf"
+                            ref={fileInputRef}
+                            onChange={handlePdfUpload}
+                            style={{ display: 'none' }}
+                            disabled={uploadingPdf}
+                        />
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingPdf}
+                            style={{ minWidth: '180px' }}
+                        >
+                            {uploadingPdf ? (
+                                <>
+                                    <Loader2 className="animate-spin" size={18} />
+                                    Processando...
+                                </>
+                            ) : (
+                                <>
+                                    <Upload size={18} />
+                                    Selecionar PDF
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {uploadProgress && (
+                    <div style={{ marginTop: '16px', padding: '12px', background: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Loader2 className="animate-spin" size={20} color="#ff9800" />
+                        <span style={{ color: '#795548' }}>{uploadProgress}</span>
+                    </div>
+                )}
             </div>
 
             {/* Info Box */}
@@ -144,13 +233,8 @@ export default function CatalogPage() {
                     </div>
                 </div>
 
-                <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
-                    <Plus size={18} /> Adicionar Produto
-                </button>
-
-                <button className="btn btn-secondary" onClick={handleBulkImport} disabled={importing}>
-                    {importing ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-                    Importar JSON
+                <button className="btn btn-secondary" onClick={() => setShowAddForm(!showAddForm)}>
+                    <Plus size={18} /> Adicionar Manual
                 </button>
 
                 <button className="btn" style={{ background: '#ffebee', color: '#c62828' }} onClick={handleResetCatalog}>
@@ -161,71 +245,35 @@ export default function CatalogPage() {
             {/* Add Product Form */}
             {showAddForm && (
                 <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-                    <h3 style={{ marginBottom: '16px' }}>Adicionar Produto</h3>
+                    <h3 style={{ marginBottom: '16px' }}>Adicionar Produto Manualmente</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Código *</label>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="46586"
-                                value={newProduct.code}
-                                onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
-                            />
+                            <input type="text" className="input" placeholder="46586" value={newProduct.code} onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })} />
                         </div>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Nome</label>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="Conjunto Jaqueta..."
-                                value={newProduct.name}
-                                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                            />
+                            <input type="text" className="input" placeholder="Conjunto..." value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
                         </div>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Categoria</label>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="Conjunto"
-                                value={newProduct.category}
-                                onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                            />
+                            <input type="text" className="input" placeholder="Conjunto" value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} />
                         </div>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 1-3</label>
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="141.61"
-                                value={newProduct.price_1_3}
-                                onChange={(e) => setNewProduct({ ...newProduct, price_1_3: e.target.value })}
-                            />
+                            <input type="number" className="input" placeholder="141.61" value={newProduct.price_1_3} onChange={(e) => setNewProduct({ ...newProduct, price_1_3: e.target.value })} />
                         </div>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 4-8</label>
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="161.86"
-                                value={newProduct.price_4_8}
-                                onChange={(e) => setNewProduct({ ...newProduct, price_4_8: e.target.value })}
-                            />
+                            <input type="number" className="input" placeholder="161.86" value={newProduct.price_4_8} onChange={(e) => setNewProduct({ ...newProduct, price_4_8: e.target.value })} />
                         </div>
                         <div>
                             <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 10-12</label>
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="188.86"
-                                value={newProduct.price_10_12}
-                                onChange={(e) => setNewProduct({ ...newProduct, price_10_12: e.target.value })}
-                            />
+                            <input type="number" className="input" placeholder="188.86" value={newProduct.price_10_12} onChange={(e) => setNewProduct({ ...newProduct, price_10_12: e.target.value })} />
                         </div>
                     </div>
                     <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={handleAddProduct}>
-                        <Save size={18} /> Salvar Produto
+                        <Save size={18} /> Salvar
                     </button>
                 </div>
             )}
@@ -245,7 +293,7 @@ export default function CatalogPage() {
                     <div style={{ padding: '40px', textAlign: 'center', color: '#636e72' }}>
                         <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
                         <p>Nenhum produto no catálogo</p>
-                        <p style={{ fontSize: '0.85rem' }}>Adicione produtos manualmente ou importe via JSON</p>
+                        <p style={{ fontSize: '0.85rem' }}>Importe um PDF ou adicione produtos manualmente</p>
                     </div>
                 ) : (
                     <div style={{ overflowX: 'auto' }}>
@@ -258,7 +306,7 @@ export default function CatalogPage() {
                                     <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>1-3</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>4-8</th>
                                     <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>10-12</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Catálogo</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>Pág</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -276,7 +324,9 @@ export default function CatalogPage() {
                                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                                             {product.price_10_12 ? `R$ ${parseFloat(product.price_10_12).toFixed(2)}` : '-'}
                                         </td>
-                                        <td style={{ padding: '12px 16px', fontSize: '0.85rem', color: '#636e72' }}>{product.catalogName || '-'}</td>
+                                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', color: '#636e72' }}>
+                                            {product.pageNumber || '-'}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
