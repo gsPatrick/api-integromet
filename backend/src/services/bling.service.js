@@ -332,6 +332,22 @@ class BlingService {
             }
         }
 
+        // Add formatted variations for better search matching
+        // Iterate over current plain variations to create formatted ones
+        for (const v of Array.from(variations)) {
+            // We only format numbers clearly looking like BR phones without country code (10 or 11 digits)
+            let raw = v;
+            if (raw.startsWith('55') && raw.length >= 12) raw = raw.substring(2);
+
+            if (raw.length === 10) {
+                // (11) 2222-3333
+                variations.add(`(${raw.substring(0, 2)}) ${raw.substring(2, 6)}-${raw.substring(6)}`);
+            } else if (raw.length === 11) {
+                // (11) 92222-3333
+                variations.add(`(${raw.substring(0, 2)}) ${raw.substring(2, 7)}-${raw.substring(7)}`);
+            }
+        }
+
         return Array.from(variations);
     }
 
@@ -415,6 +431,15 @@ class BlingService {
             });
             return response.data.data;
         } catch (error) {
+            const errorData = error.response?.data?.error;
+            const errorMsg = JSON.stringify(errorData || error.message);
+
+            // If error is "Product already exists", ignore it and proceed
+            if (errorMsg.includes('já existe') || errorMsg.includes('already exists')) {
+                console.warn(`[BlingService] Product ${productData.sku} already exists (trap). Proceeding.`);
+                return { id: 0, codigo: productData.sku }; // Mock return
+            }
+
             console.error('[BlingService] Failed to create product:', JSON.stringify(error.response?.data || error.message, null, 2));
             throw error;
         }
