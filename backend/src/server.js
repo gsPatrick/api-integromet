@@ -109,12 +109,13 @@ async function startServer() {
         app.sequelize.sync({ force: true }).then(() => {
             console.log('Database synced (FORCE mode - Data wiped)');
 
-            // Seed Admin User
+            // Seed Default Admin User
             const User = require('./models/User'); // Ensure User model is loaded
-            User.findOne({ where: { username: 'admin' } }).then(admin => {
+            const defaultUser = 'dpbrinquedoscriativos@gmail.com';
+            User.findOne({ where: { username: defaultUser } }).then(admin => {
                 if (!admin) {
-                    User.create({ username: 'admin', password: 'admin' });
-                    console.log('[Server] Admin user created automatically.');
+                    User.create({ username: defaultUser, password: 'DP#bc#1212' });
+                    console.log(`[Server] Default user (${defaultUser}) created automatically.`);
                 }
             });
 
