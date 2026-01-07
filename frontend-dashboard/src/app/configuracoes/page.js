@@ -8,7 +8,8 @@ export default function ConfigPage() {
     const [status, setStatus] = useState({ connected: false, message: 'Verificando...' });
     const [settings, setSettings] = useState({
         markup_percentage: 35,
-        group_orders: false
+        group_orders: false,
+        campaign_description: ''
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -39,7 +40,8 @@ export default function ConfigPage() {
                 ...prev,
                 ...res.data, // Merge with defaults
                 markup_percentage: Number(res.data.markup_percentage || 35),
-                group_orders: res.data.group_orders === true || res.data.group_orders === 'true'
+                group_orders: res.data.group_orders === true || res.data.group_orders === 'true',
+                campaign_description: res.data.campaign_description || ''
             }));
         } catch (error) {
             console.error('Failed to fetch settings', error);
@@ -54,7 +56,8 @@ export default function ConfigPage() {
             // Send payload exactly as expected by backend
             const payload = {
                 markup_percentage: settings.markup_percentage,
-                group_orders: settings.group_orders
+                group_orders: settings.group_orders,
+                campaign_description: settings.campaign_description
             };
 
             await api.put('/settings', payload);
@@ -166,6 +169,23 @@ export default function ConfigPage() {
                                     Ao sincronizar, o sistema buscará outros pedidos pendentes do mesmo número de WhatsApp e criará um único pedido no Bling com vários itens.
                                 </p>
                             </div>
+                        </div>
+
+                        {/* Campaign Description */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', color: '#2d3436' }}>
+                                Descrição da Campanha
+                            </label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={settings.campaign_description}
+                                onChange={(e) => setSettings({ ...settings, campaign_description: e.target.value })}
+                                placeholder="Ex: Verdi Jan 26"
+                            />
+                            <p style={{ fontSize: '0.75rem', color: '#b2bec3', marginTop: '6px' }}>
+                                Texto que será adicionado à descrição dos produtos no Bling para identificar a campanha.
+                            </p>
                         </div>
 
                         <button

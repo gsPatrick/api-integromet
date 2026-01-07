@@ -137,14 +137,21 @@ class BlingService {
             // Use the first order for customer info
             const mainOrder = orders[0];
 
+            // Fetch campaign description setting
+            const SettingsController = require('../controllers/settings.controller');
+            const campaignDescription = await SettingsController.getValue('campaign_description', '');
+
             // Try to find or create client
             let clientId = null;
             try {
                 const phone = (mainOrder.customerPhone || '').replace(/\D/g, '');
+                console.log(`[BlingService] Searching for client with phone: ${phone}`);
                 let client = await this._findClient(token, phone);
 
-                if (!client) {
-                    console.log(`[BlingService] Client not found. Creating with name only...`);
+                if (client) {
+                    console.log(`[BlingService] Found existing client: ID ${client.id}, Name: ${client.nome}`);
+                } else {
+                    console.log(`[BlingService] Client not found. Creating new client...`);
                     client = await this._createClient(token, {
                         nome: mainOrder.customerName || 'Cliente WhatsApp',
                         telefone: phone
@@ -155,20 +162,29 @@ class BlingService {
                     clientId = client.id;
                 }
             } catch (clientError) {
-                console.warn('[BlingService] Could not create client, proceeding without:', clientError.message);
+                console.warn('[BlingService] Could not find/create client, proceeding without:', clientError.message);
             }
 
             // Construct payload with multiple items
             const payload = {
                 data: new Date().toISOString().split('T')[0],
-                itens: orders.map(order => ({
-                    codigo: 'WAPP-' + (order.id || '0'),
-                    descricao: (order.productRaw || 'Produto WhatsApp') + ` (Cor: ${order.extractedColor || '-'})`,
-                    quantidade: order.quantity || 1,
-                    valor: order.sellPrice || 0,
-                    unidade: 'UN'
-                })),
-                observacoes: `Pedido via WhatsApp. IDs: ${orders.map(o => o.id).join(', ')}. Cliente: ${mainOrder.customerName}`
+                itens: orders.map(order => {
+                    // Build description with campaign info if available
+                    let descricao = order.productRaw || 'Produto WhatsApp';
+                    descricao += ` (Cor: ${order.extractedColor || '-'})`;
+                    if (campaignDescription) {
+                        descricao += ` - ${campaignDescription}`;
+                    }
+
+                    return {
+                        codigo: 'WAPP-' + (order.id || '0'),
+                        descricao: descricao,
+                        quantidade: order.quantity || 1,
+                        valor: order.sellPrice || 0,
+                        unidade: 'UN'
+                    };
+                }),
+                observacoes: `Pedido via WhatsApp. IDs: ${orders.map(o => o.id).join(', ')}. Cliente: ${mainOrder.customerName}${campaignDescription ? `. Campanha: ${campaignDescription}` : ''}`
             };
 
             if (clientId) {
