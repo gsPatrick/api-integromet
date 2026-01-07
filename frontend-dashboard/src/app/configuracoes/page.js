@@ -19,18 +19,28 @@ export default function ConfigPage() {
     }, []);
 
     const checkStatus = async () => {
-        // Mock check (replace with real one if available)
-        setStatus({ connected: false, message: 'Não verificado' });
+        try {
+            const res = await api.get('/integrations/status');
+            setStatus({
+                connected: res.data.blingConnected,
+                message: res.data.blingConnected ? 'Conectado' : 'Desconectado'
+            });
+        } catch (error) {
+            console.error('Failed to check integration status:', error);
+            setStatus({ connected: false, message: 'Erro ao verificar' });
+        }
     };
 
     const fetchSettings = async () => {
         try {
             const res = await api.get('/settings');
             // Ensure values are correct types
-            setSettings({
+            setSettings(prev => ({
+                ...prev,
+                ...res.data, // Merge with defaults
                 markup_percentage: Number(res.data.markup_percentage || 35),
                 group_orders: res.data.group_orders === true || res.data.group_orders === 'true'
-            });
+            }));
         } catch (error) {
             console.error('Failed to fetch settings', error);
         } finally {
@@ -41,10 +51,17 @@ export default function ConfigPage() {
     const handleSaveSettings = async () => {
         setSaving(true);
         try {
-            await api.put('/settings', settings);
-            alert('Configurações salvas!');
+            // Send payload exactly as expected by backend
+            const payload = {
+                markup_percentage: settings.markup_percentage,
+                group_orders: settings.group_orders
+            };
+
+            await api.put('/settings', payload);
+            alert('Configurações salvas com sucesso!');
         } catch (error) {
-            alert('Erro ao salvar.');
+            console.error('Save settings error:', error);
+            alert('Erro ao salvar: ' + (error.response?.data?.error || error.message));
         } finally {
             setSaving(false);
         }
