@@ -106,8 +106,8 @@ async function startServer() {
         // Attach sequelize to app for easier access if needed, though it's already imported
         app.sequelize = sequelize;
 
-        app.sequelize.sync({ force: true }).then(() => {
-            console.log('Database synced (FORCE mode - Data wiped)');
+        app.sequelize.sync({ alter: true }).then(() => {
+            console.log('Database synced (ALTER mode - Data preserved)');
 
             // Seed Default Admin User
             const User = require('./models/User'); // Ensure User model is loaded
