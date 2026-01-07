@@ -174,10 +174,15 @@ class WebhookController {
             }
 
             // 2. Fallback: Ask OpenAI Assistant (PDF Search)
-            // If still no price, or if no code but we have a description
-            if (!catalogPrice) {
-                const query = produto.codigo ? `Código ${produto.codigo}` : produto.descricao;
-                console.log(`[Webhook] Price not found locally. Asking Assistant about "${query}"...`);
+            // Trigger if: No price locally OR We suspect missing color details (have color name but no code)
+            const needsAssistant = !catalogPrice || (!produto.codigo_cor && (produto.cor || produto.tamanho));
+
+            if (needsAssistant) {
+                let query = produto.codigo ? `Código ${produto.codigo}` : produto.descricao;
+                if (produto.codigo_cor) query += ` cor ${produto.codigo_cor}`;
+                if (produto.tamanho) query += ` tamanho ${produto.tamanho}`;
+
+                console.log(`[Webhook] Needs more info (Price/ColorCode). Asking Assistant about "${query}"...`);
 
                 try {
                     const assistResult = await catalogAssistant.searchCatalog(query);
@@ -185,21 +190,29 @@ class WebhookController {
                         const bestMatch = assistResult.produtos[0];
 
                         // Use size-specific price if available
-                        if (bestMatch.tamanhos_precos && produto.tamanho) {
-                            // Simple logic to match size (can be improved)
-                            const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => k.includes(produto.tamanho));
-                            if (sizeKey) {
-                                catalogPrice = bestMatch.tamanhos_precos[sizeKey];
+                        if (!catalogPrice) {
+                            if (bestMatch.tamanhos_precos && produto.tamanho) {
+                                // Simple logic to match size (can be improved)
+                                const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => k.includes(produto.tamanho));
+                                if (sizeKey) {
+                                    catalogPrice = bestMatch.tamanhos_precos[sizeKey];
+                                } else {
+                                    catalogPrice = bestMatch.preco;
+                                }
                             } else {
                                 catalogPrice = bestMatch.preco;
                             }
-                        } else {
-                            catalogPrice = bestMatch.preco;
                         }
 
                         // Update metadata if missing
                         if (!produto.codigo && bestMatch.codigo) produto.codigo = bestMatch.codigo;
                         if (!produto.descricao && bestMatch.nome) produto.descricao = bestMatch.nome;
+
+                        // Capture Color Code if AI found it
+                        if (!produto.codigo_cor && bestMatch.codigo_cor) {
+                            produto.codigo_cor = bestMatch.codigo_cor;
+                            console.log(`[Webhook] Assistant found Color Code: ${produto.codigo_cor}`);
+                        }
 
                         console.log(`[Webhook] Assistant found product! Price: R$${catalogPrice}`);
                     } else {

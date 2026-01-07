@@ -120,7 +120,7 @@ class CatalogAssistantService {
                     {
                         "encontrado": boolean,
                         "produtos": [
-                            { "codigo": "string", "nome": "string", "preco": number, "tamanhos_precos": { "1-3": 0, "4-8": 0 } }
+                            { "codigo": "string", "nome": "string", "preco": number, "tamanhos_precos": { "1-3": 0, "4-8": 0 }, "codigo_cor": "string" }
                         ]
                     }`
                 }
