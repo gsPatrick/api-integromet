@@ -21,12 +21,6 @@ class CatalogAssistantService {
         if (this.assistantId && this.vectorStoreId) return;
 
         console.log('[CatalogAssistant] Initializing OpenAI Assistant...');
-        console.log('[CatalogAssistant] OpenAI client keys:', Object.keys(this.openai));
-        if (this.openai.beta) {
-            console.log('[CatalogAssistant] OpenAI.beta keys:', Object.keys(this.openai.beta));
-        } else {
-            console.error('[CatalogAssistant] OpenAI.beta is UNDEFINED!');
-        }
 
         // 1. Create Vector Store
         if (!this.vectorStoreId) {
