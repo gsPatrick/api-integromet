@@ -39,7 +39,7 @@ export default function ConfigPage() {
             setSettings(prev => ({
                 ...prev,
                 ...res.data, // Merge with defaults
-                markup_percentage: Number(res.data.markup_percentage || 35),
+                markup_percentage: Number(res.data.markup_percentage ?? 35),
                 group_orders: res.data.group_orders === true || res.data.group_orders === 'true',
                 campaign_description: res.data.campaign_description || ''
             }));
