@@ -165,32 +165,61 @@ class BlingService {
                 console.warn('[BlingService] Could not find/create client, proceeding without:', clientError.message);
             }
 
-            // Construct payload with multiple items
-            const payload = {
-                data: new Date().toISOString().split('T')[0],
-                itens: orders.map(order => {
-                    // Build description with campaign info if available
-                    let descricao = order.productRaw || 'Produto WhatsApp';
+            // Process items and ensure products exist in Bling
+            const orderItems = [];
 
+            for (const order of orders) {
+                // 1. Generate SKU
+                let sku = 'WAPP-' + order.id;
+                let baseCode = null;
+
+                // Try to extract code from [CODE] Name format
+                const codeMatch = (order.productRaw || '').match(/^\[([\w-]+)\]/);
+                if (codeMatch) {
+                    baseCode = codeMatch[1];
+                }
+
+                // Construct a smart SKU: CODE-COLORCODE-SIZE
+                // Example: 46274-120722-2
+                if (baseCode) {
+                    const parts = [baseCode];
+                    if (order.extractedColorCode) parts.push(order.extractedColorCode);
+                    if (order.extractedSize) parts.push(order.extractedSize);
+                    sku = parts.join('-');
+                }
+
+                // 2. Find or Create Product
+                let product = await this._findProduct(token, sku);
+                if (!product) {
+                    // Create it
                     const details = [];
                     if (order.extractedColor) details.push(`Cor: ${order.extractedColor}`);
-                    if (order.extractedColorCode) details.push(`Cód: ${order.extractedColorCode}`);
                     if (order.extractedSize) details.push(`Tam: ${order.extractedSize}`);
 
-                    if (details.length > 0) descricao += ` (${details.join(', ')})`;
+                    const productName = (order.productRaw || 'Produto WhatsApp').replace(/^\[[\w-]+\]\s*/, '') +
+                        (details.length > 0 ? ` (${details.join(', ')})` : '');
 
-                    if (campaignDescription) {
-                        descricao += ` - ${campaignDescription}`;
-                    }
+                    product = await this._createProduct(token, {
+                        sku: sku,
+                        nome: productName,
+                        price: order.sellPrice || 0
+                    });
+                }
 
-                    return {
-                        codigo: 'WAPP-' + (order.id || '0'),
-                        descricao: descricao,
-                        quantidade: order.quantity || 1,
-                        valor: order.sellPrice || 0,
-                        unidade: 'UN'
-                    };
-                }),
+                // 3. Add to Order Items
+                orderItems.push({
+                    codigo: sku, // Link by SKU
+                    descricao: (order.productRaw || 'Produto WhatsApp'), // Keep original desc for reference or simpler one
+                    quantidade: order.quantity || 1,
+                    valor: order.sellPrice || 0,
+                    unidade: 'UN'
+                });
+            }
+
+            // Construct payload
+            const payload = {
+                data: new Date().toISOString().split('T')[0],
+                itens: orderItems,
                 observacoes: `Pedido via WhatsApp. IDs: ${orders.map(o => o.id).join(', ')}. Cliente: ${mainOrder.customerName}${campaignDescription ? `. Campanha: ${campaignDescription}` : ''}`
             };
 
@@ -340,6 +369,54 @@ class BlingService {
             console.error('[BlingService] Failed to create client:', JSON.stringify(error.response?.data || error.message, null, 2));
             // Don't throw, just return null so we can proceed without client binding if needed
             return null;
+        }
+    }
+
+    // =========================================================================
+    // PRODUCT METHODS
+    // =========================================================================
+
+    async _findProduct(token, sku) {
+        await this._sleep(350);
+        try {
+            const response = await axios.get(`${this.baseUrl}/produtos?codigo=${sku}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (response.data.data && response.data.data.length > 0) {
+                return response.data.data[0];
+            }
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async _createProduct(token, productData) {
+        await this._sleep(350);
+
+        const payload = {
+            nome: productData.nome,
+            codigo: productData.sku,
+            preco: productData.price || 0,
+            tipo: 'P', // Produto
+            situacao: 'A', // Ativo
+            formato: 'S' // Simples
+        };
+
+        if (productData.description) {
+            payload.descricaoCurta = productData.description;
+        }
+
+        try {
+            console.log(`[BlingService] Creating product: ${productData.sku}`);
+            const response = await axios.post(`${this.baseUrl}/produtos`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return response.data.data;
+        } catch (error) {
+            console.error('[BlingService] Failed to create product:', JSON.stringify(error.response?.data || error.message, null, 2));
+            throw error;
         }
     }
 }
