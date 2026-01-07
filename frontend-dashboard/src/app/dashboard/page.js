@@ -63,13 +63,13 @@ export default function Dashboard() {
 
     // Toggle single order selection
     const toggleOrderSelection = (order) => {
-        if (order.status === 'PROCESSED') return;
+        if (order.blingSyncedAt) return;
         setSelectedOrders(prev => ({ ...prev, [order.id]: !prev[order.id] }));
     };
 
     // Select/Deselect all PENDING orders for a customer
     const toggleSelectAllForCustomer = (group) => {
-        const pendingOrders = group.orders.filter(o => o.status !== 'PROCESSED');
+        const pendingOrders = group.orders.filter(o => !o.blingSyncedAt);
         if (pendingOrders.length === 0) return;
 
         const allSelected = pendingOrders.every(o => selectedOrders[o.id]);
@@ -83,7 +83,7 @@ export default function Dashboard() {
 
     // Check if all PENDING orders for a customer are selected
     const areAllSelectedForCustomer = (group) => {
-        const pendingOrders = group.orders.filter(o => o.status !== 'PROCESSED');
+        const pendingOrders = group.orders.filter(o => !o.blingSyncedAt);
         return pendingOrders.length > 0 && pendingOrders.every(o => selectedOrders[o.id]);
     };
 
@@ -126,8 +126,8 @@ export default function Dashboard() {
 
     // Sync ALL orders for a customer (grouped into one Bling order)
     const handleSyncAllGrouped = async (group) => {
-        // Only sync PENDING orders
-        const pendingOrders = group.orders.filter(o => o.status === 'PENDING');
+        // Only sync PENDING orders (not yet synced to Bling)
+        const pendingOrders = group.orders.filter(o => !o.blingSyncedAt);
 
         if (pendingOrders.length === 0) {
             alert('Todos os pedidos deste cliente já foram sincronizados!');
@@ -317,7 +317,7 @@ export default function Dashboard() {
                                         {group.orders.map(order => (
                                             <div key={order.id} style={{ position: 'relative' }}>
                                                 {/* Checkbox Overlay - Hide if processed */}
-                                                {order.status !== 'PROCESSED' && (
+                                                {!order.blingSyncedAt && (
                                                     <div
                                                         onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order); }}
                                                         style={{

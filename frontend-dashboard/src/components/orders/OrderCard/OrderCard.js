@@ -46,8 +46,8 @@ export default function OrderCard({ order, onClick }) {
                         <div className={styles.customerName}>{order.customerName || 'Cliente Desconhecido'}</div>
                         <div className={styles.customerPhone}>{order.customerPhone}</div>
                     </div>
-                    <span className={`${styles.status} ${getStatusClass(order.status)}`}>
-                        {order.status === 'PROCESSED' ? 'Sincronizado' :
+                    <span className={`${styles.status} ${order.blingSyncedAt ? styles.statusProcessed : getStatusClass(order.status)}`}>
+                        {order.blingSyncedAt ? 'Sincronizado no Bling' :
                             order.status === 'ERROR' ? 'Erro' : 'Pendente'}
                     </span>
                 </div>

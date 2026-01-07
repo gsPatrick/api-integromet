@@ -122,6 +122,7 @@ class OrderController {
             // Update status for ALL synced orders
             for (const o of ordersToSync) {
                 o.status = 'PROCESSED';
+                o.blingSyncedAt = new Date();
                 await o.save();
             }
 

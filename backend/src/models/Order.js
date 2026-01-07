@@ -50,6 +50,10 @@ const Order = sequelize.define('Order', {
     originalMessage: {
         type: DataTypes.TEXT,
         allowNull: true
+    },
+    blingSyncedAt: {
+        type: DataTypes.DATE,
+        allowNull: true
     }
 }, {
     tableName: 'orders',
