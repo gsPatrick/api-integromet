@@ -62,26 +62,32 @@ export default function Dashboard() {
     };
 
     // Toggle single order selection
-    const toggleOrderSelection = (orderId) => {
-        setSelectedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+    const toggleOrderSelection = (order) => {
+        if (order.status === 'PROCESSED') return;
+        setSelectedOrders(prev => ({ ...prev, [order.id]: !prev[order.id] }));
     };
 
-    // Select/Deselect all orders for a customer
+    // Select/Deselect all PENDING orders for a customer
     const toggleSelectAllForCustomer = (group) => {
-        const allSelected = group.orders.every(o => selectedOrders[o.id]);
+        const pendingOrders = group.orders.filter(o => o.status !== 'PROCESSED');
+        if (pendingOrders.length === 0) return;
+
+        const allSelected = pendingOrders.every(o => selectedOrders[o.id]);
         const newSelections = { ...selectedOrders };
-        group.orders.forEach(o => {
+
+        pendingOrders.forEach(o => {
             newSelections[o.id] = !allSelected;
         });
         setSelectedOrders(newSelections);
     };
 
-    // Check if all orders for a customer are selected
+    // Check if all PENDING orders for a customer are selected
     const areAllSelectedForCustomer = (group) => {
-        return group.orders.length > 0 && group.orders.every(o => selectedOrders[o.id]);
+        const pendingOrders = group.orders.filter(o => o.status !== 'PROCESSED');
+        return pendingOrders.length > 0 && pendingOrders.every(o => selectedOrders[o.id]);
     };
 
-    // Get selected order IDs for a customer
+    // Get selected order IDs for a customer (only pending ones should be select-able anyway)
     const getSelectedIdsForCustomer = (group) => {
         return group.orders.filter(o => selectedOrders[o.id]).map(o => o.id);
     };
@@ -91,7 +97,7 @@ export default function Dashboard() {
         const selectedIds = getSelectedIdsForCustomer(group);
 
         if (selectedIds.length === 0) {
-            alert('Selecione pelo menos um pedido para sincronizar.');
+            alert('Selecione pelo menos um pedido pendente para sincronizar.');
             return;
         }
 
@@ -120,12 +126,20 @@ export default function Dashboard() {
 
     // Sync ALL orders for a customer (grouped into one Bling order)
     const handleSyncAllGrouped = async (group) => {
-        if (!confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos deste cliente como UM ÚNICO pedido agrupado no Bling?`)) return;
+        // Only sync PENDING orders
+        const pendingOrders = group.orders.filter(o => o.status === 'PENDING');
+
+        if (pendingOrders.length === 0) {
+            alert('Todos os pedidos deste cliente já foram sincronizados!');
+            return;
+        }
+
+        if (!confirm(`Deseja sincronizar ${pendingOrders.length} pedido(s) pendentes deste cliente como UM ÚNICO pedido agrupado no Bling?`)) return;
 
         setSyncing(group.customerPhone);
         try {
             await api.post(`/customers/${encodeURIComponent(group.customerPhone)}/sync`);
-            alert('Sucesso! Todos os pedidos foram agrupados e sincronizados com o Bling.');
+            alert('Sucesso! Todos os pedidos pendentes foram agrupados e sincronizados com o Bling.');
             fetchOrders();
         } catch (err) {
             alert('Erro: ' + (err.response?.data?.error || err.message));
@@ -302,24 +316,26 @@ export default function Dashboard() {
                                     }}>
                                         {group.orders.map(order => (
                                             <div key={order.id} style={{ position: 'relative' }}>
-                                                {/* Checkbox Overlay */}
-                                                <div
-                                                    onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order.id); }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: '12px',
-                                                        left: '12px',
-                                                        zIndex: 10,
-                                                        cursor: 'pointer',
-                                                        background: 'white',
-                                                        borderRadius: '4px',
-                                                        padding: '2px',
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                                        color: selectedOrders[order.id] ? '#e67e22' : '#b2bec3'
-                                                    }}
-                                                >
-                                                    {selectedOrders[order.id] ? <CheckSquare size={20} /> : <Square size={20} />}
-                                                </div>
+                                                {/* Checkbox Overlay - Hide if processed */}
+                                                {order.status !== 'PROCESSED' && (
+                                                    <div
+                                                        onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order); }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '12px',
+                                                            left: '12px',
+                                                            zIndex: 10,
+                                                            cursor: 'pointer',
+                                                            background: 'white',
+                                                            borderRadius: '4px',
+                                                            padding: '2px',
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                                            color: selectedOrders[order.id] ? '#e67e22' : '#b2bec3'
+                                                        }}
+                                                    >
+                                                        {selectedOrders[order.id] ? <CheckSquare size={20} /> : <Square size={20} />}
+                                                    </div>
+                                                )}
 
                                                 <OrderCard
                                                     order={order}
