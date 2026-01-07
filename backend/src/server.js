@@ -63,19 +63,32 @@ app.post('/orders/:id/sync-bling', orderController.syncOrderToBling.bind(orderCo
 async function startServer() {
     try {
         // Sync Database
-        console.log('[Server] Admin user created automatically (admin/admin).');
-    }
-        } catch (seedError) {
-    console.error('[Server] Failed to seed admin user (non-critical):', seedError.message);
-}
+        // Attach sequelize to app for easier access if needed, though it's already imported
+        app.sequelize = sequelize;
 
-app.listen(PORT, () => {
-    console.log(`[Server] Running on port ${PORT}`);
-});
+        app.sequelize.sync({ force: true }).then(() => {
+            console.log('Database synced (FORCE mode - Data wiped)');
 
+            // Seed Admin User
+            const User = require('./models/User'); // Ensure User model is loaded
+            User.findOne({ where: { username: 'admin' } }).then(admin => {
+                if (!admin) {
+                    User.create({ username: 'admin', password: 'admin' });
+                    console.log('[Server] Admin user created automatically.');
+                }
+            });
+
+            // app.listen... moved below
+            app.listen(PORT, () => {
+                console.log(`[Server] Running on port ${PORT}`);
+            });
+        }).catch(err => {
+            console.error('Failed to sync database:', err);
+        });
     } catch (error) {
-    console.error('[Server] Failed to start:', error);
-}
+        console.error('[Server] Failed to start:', error);
+    }
 }
 
 startServer();
+```
