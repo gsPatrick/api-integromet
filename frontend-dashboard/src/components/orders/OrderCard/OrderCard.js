@@ -47,7 +47,8 @@ export default function OrderCard({ order, onClick }) {
                         <div className={styles.customerPhone}>{order.customerPhone}</div>
                     </div>
                     <span className={`${styles.status} ${getStatusClass(order.status)}`}>
-                        {order.status}
+                        {order.status === 'PROCESSED' ? 'Sincronizado' :
+                            order.status === 'ERROR' ? 'Erro' : 'Pendente'}
                     </span>
                 </div>
 

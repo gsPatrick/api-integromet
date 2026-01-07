@@ -95,7 +95,7 @@ export default function Dashboard() {
             return;
         }
 
-        if (!confirm(`Deseja sincronizar ${selectedIds.length} pedido(s) selecionado(s)?`)) return;
+        if (!confirm(`Deseja sincronizar ${selectedIds.length} pedido(s) separadamente?`)) return;
 
         setSyncing(group.customerPhone);
         try {
@@ -103,11 +103,13 @@ export default function Dashboard() {
             for (const id of selectedIds) {
                 await api.post(`/orders/${id}/sync-bling?mode=single`);
             }
-            alert(`${selectedIds.length} pedido(s) sincronizado(s) com sucesso!`);
+            alert(`Sucesso! ${selectedIds.length} pedido(s) foram sincronizados individualmente.`);
+
             // Clear selections for this customer
             const newSelections = { ...selectedOrders };
             group.orders.forEach(o => { newSelections[o.id] = false; });
             setSelectedOrders(newSelections);
+
             fetchOrders();
         } catch (err) {
             alert('Erro ao sincronizar: ' + (err.response?.data?.error || err.message));
@@ -118,12 +120,12 @@ export default function Dashboard() {
 
     // Sync ALL orders for a customer (grouped into one Bling order)
     const handleSyncAllGrouped = async (group) => {
-        if (!confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos como um único pedido no Bling?`)) return;
+        if (!confirm(`Deseja sincronizar TODOS os ${group.orders.length} pedidos deste cliente como UM ÚNICO pedido agrupado no Bling?`)) return;
 
         setSyncing(group.customerPhone);
         try {
             await api.post(`/customers/${encodeURIComponent(group.customerPhone)}/sync`);
-            alert('Sincronização em massa concluída!');
+            alert('Sucesso! Todos os pedidos foram agrupados e sincronizados com o Bling.');
             fetchOrders();
         } catch (err) {
             alert('Erro: ' + (err.response?.data?.error || err.message));
