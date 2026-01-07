@@ -21,7 +21,6 @@ class CatalogAssistantService {
         if (this.assistantId && this.vectorStoreId) return;
 
         console.log('[CatalogAssistant] Initializing OpenAI Assistant...');
-        console.log('[CatalogAssistant] OpenAI Lib Version Debug:', require('openai/package.json').version);
         console.log('[CatalogAssistant] OpenAI client keys:', Object.keys(this.openai));
         if (this.openai.beta) {
             console.log('[CatalogAssistant] OpenAI.beta keys:', Object.keys(this.openai.beta));
