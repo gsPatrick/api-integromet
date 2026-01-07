@@ -207,13 +207,20 @@ class BlingService {
                 }
 
                 // 3. Add to Order Items
-                orderItems.push({
-                    codigo: sku, // Link by SKU
-                    descricao: (order.productRaw || 'Produto WhatsApp'), // Keep original desc for reference or simpler one
+                const itemPayload = {
+                    descricao: (order.productRaw || 'Produto WhatsApp'), // Keep original desc for reference
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
                     unidade: 'UN'
-                });
+                };
+
+                if (product && product.id) {
+                    itemPayload.produto = { id: product.id };
+                } else {
+                    itemPayload.codigo = sku; // Fallback to code if ID missing (shouldn't happen)
+                }
+
+                orderItems.push(itemPayload);
             }
 
             // Construct payload
@@ -436,8 +443,14 @@ class BlingService {
 
             // If error is "Product already exists", ignore it and proceed
             if (errorMsg.includes('já existe') || errorMsg.includes('already exists')) {
-                console.warn(`[BlingService] Product ${productData.sku} already exists (trap). Proceeding.`);
-                return { id: 0, codigo: productData.sku }; // Mock return
+                console.warn(`[BlingService] Product ${productData.sku} already exists (trap). Fetching ID...`);
+                // Fetch the existing product to get its ID
+                const existing = await this._findProduct(token, productData.sku);
+                if (existing) {
+                    return existing;
+                }
+                // If somehow not found (race condition?), return mock with code
+                return { id: 0, codigo: productData.sku };
             }
 
             console.error('[BlingService] Failed to create product:', JSON.stringify(error.response?.data || error.message, null, 2));
