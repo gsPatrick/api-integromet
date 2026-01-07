@@ -10,6 +10,7 @@ const importController = require('./controllers/import.controller');
 const authMiddleware = require('./middleware/auth');
 const User = require('./models/User');
 const CatalogProduct = require('./models/CatalogProduct');
+const MessageContext = require('./models/MessageContext');
 
 require('dotenv').config();
 

@@ -1,12 +1,20 @@
 const MessageLog = require('../models/MessageLog');
 const Order = require('../models/Order');
+const MessageContext = require('../models/MessageContext');
 const whatsappService = require('../services/whatsapp.service');
 const aiService = require('../services/ai.service');
 const sheetsService = require('../services/sheets.service');
 const blingService = require('../services/bling.service');
 const storageService = require('../services/storage.service');
+const CatalogController = require('./catalog.controller');
+const SettingsController = require('./settings.controller');
+const catalogAssistant = require('../services/catalogAssistant.service'); // Fallback
 
 class WebhookController {
+    // ... (rest of class)
+
+    // ... (inside processMessagePayload loop)
+
 
     constructor() {
         this.handleWebhook = this.handleWebhook.bind(this);
@@ -63,7 +71,7 @@ class WebhookController {
             return 'DUPLICATE';
         }
 
-        // Save to MessageLog
+        // Save to MessageLog (Historical)
         await MessageLog.create({
             messageId: payload.messageId,
             chatId: payload.chatId || payload.phone,
@@ -76,37 +84,65 @@ class WebhookController {
         console.log('[Webhook] Message logged to DB.');
 
         // ---------------------------------------------------------
-        // 2. CONTEXT RESOLUTION (Need Image to Send to AI)
+        // 2. SAVE TO CONTEXT
         // ---------------------------------------------------------
-        const targetImageUrl = await whatsappService.resolveImageContext(payload);
+        await MessageContext.create({
+            customerPhone: payload.phone,
+            groupId: payload.chatId !== payload.phone ? payload.chatId : null,
+            messageId: payload.messageId,
+            messageType: payload.image ? 'image' : 'text',
+            textContent: payload.text ? payload.text.message : (payload.image ? payload.image.caption : null),
+            imageUrl: payload.image ? payload.image.imageUrl : null,
+            quotedMessageId: payload.context ? payload.context.quotedMessageId : null
+        });
+        console.log('[Webhook] Message saved to Context DB.');
 
-        if (!targetImageUrl) {
-            console.log('[Webhook] No image context. Skipping AI analysis.');
-            return 'OK_NO_IMAGE';
+        // ---------------------------------------------------------
+        // 3. DETERMINE PROCESSING STRATEGY
+        // ---------------------------------------------------------
+        let aiResult = null;
+        let targetImageUrl = null;
+        const userText = payload.text ? payload.text.message : (payload.image ? payload.image.caption : '');
+
+        // CASE A: Direct Image (with or without caption)
+        if (payload.image) {
+            targetImageUrl = payload.image.imageUrl;
+            console.log('[Webhook] Processing IMAGE message...');
+            aiResult = await aiService.analyzeMessage(targetImageUrl, userText);
+        }
+        // CASE B: Text Message (Standalone or Reply)
+        else if (payload.text) {
+            console.log('[Webhook] Processing TEXT message...');
+
+            // Fetch recent context (last 5 messages)
+            const contextMessages = await MessageContext.getRecentContext(payload.phone, 5);
+
+            aiResult = await aiService.analyzeTextOrder(userText, contextMessages);
+
+            // If it refers to previous image, we need that image URL for order record
+            if (aiResult.referencia_imagem_anterior) {
+                const lastImage = contextMessages.find(m => m.imageUrl && m.messageType !== 'text');
+                if (lastImage) {
+                    targetImageUrl = lastImage.imageUrl;
+                    console.log('[Webhook] Associated with previous image:', targetImageUrl);
+                }
+            }
+        } else {
+            console.log('[Webhook] Unknown message type. Skipping.');
+            return 'SKIPPED_UNKNOWN_TYPE';
         }
 
         // ---------------------------------------------------------
-        // 3. AI-BASED INTENT DETECTION & EXTRACTION
+        // 4. CHECK INTENT & PROCESS ORDERS
         // ---------------------------------------------------------
-        const textMessage = payload.text ? payload.text.message :
-            (payload.image && payload.image.caption ? payload.image.caption : '');
-
-        console.log('[Webhook] Sending to AI for analysis...');
-        const aiResult = await aiService.analyzeMessage(targetImageUrl, textMessage);
-
-        // Check if AI detected purchase intent
-        if (!aiResult.intencao_compra) {
+        if (!aiResult || !aiResult.intencao_compra) {
             console.log('[Webhook] AI detected NO purchase intent. Finished.');
-            console.log('[Webhook] AI identified', aiResult.produtos_identificados || 0, 'products in image');
             return 'OK_NO_INTENT';
         }
 
         console.log('[Webhook] AI detected PURCHASE INTENT!');
         console.log('[Webhook] AI observation:', aiResult.observacao || 'N/A');
 
-        // ---------------------------------------------------------
-        // 4. CREATE ORDERS FOR EACH PRODUCT
-        // ---------------------------------------------------------
         const produtos = aiResult.produtos || [];
 
         if (produtos.length === 0) {
@@ -117,8 +153,6 @@ class WebhookController {
         console.log(`[Webhook] Creating ${produtos.length} order(s)...`);
 
         // Fetch markup setting
-        const SettingsController = require('./settings.controller');
-        const CatalogController = require('./catalog.controller');
         const markupPercentage = await SettingsController.getValue('markup_percentage', 35);
         const markup = 1 + (Number(markupPercentage) / 100);
 
@@ -127,26 +161,62 @@ class WebhookController {
         for (const produto of produtos) {
             let catalogPrice = produto.preco_catalogo ? parseFloat(produto.preco_catalogo) : null;
 
-            // If no price from AI, try to find in our catalog by product code
+            // If no price from AI (or text-only), try to find in our catalog by product code
+            // Note: For text-only lists, AI might not extract code unless user typed it
+            // We can improve this later with search by name
             if (!catalogPrice && produto.codigo) {
-                console.log(`[Webhook] No price in image. Looking up code ${produto.codigo} in catalog...`);
+                console.log(`[Webhook] No price. Looking up code ${produto.codigo} in catalog...`);
                 const catalogLookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
                 if (catalogLookup) {
                     catalogPrice = parseFloat(catalogLookup);
                     console.log(`[Webhook] Found price in catalog: R$${catalogPrice}`);
-                } else {
-                    console.log(`[Webhook] Code ${produto.codigo} not found in catalog.`);
+                }
+            }
+
+            // 2. Fallback: Ask OpenAI Assistant (PDF Search)
+            // If still no price, or if no code but we have a description
+            if (!catalogPrice) {
+                const query = produto.codigo ? `Código ${produto.codigo}` : produto.descricao;
+                console.log(`[Webhook] Price not found locally. Asking Assistant about "${query}"...`);
+
+                try {
+                    const assistResult = await catalogAssistant.searchCatalog(query);
+                    if (assistResult.encontrado && assistResult.produtos && assistResult.produtos.length > 0) {
+                        const bestMatch = assistResult.produtos[0];
+
+                        // Use size-specific price if available
+                        if (bestMatch.tamanhos_precos && produto.tamanho) {
+                            // Simple logic to match size (can be improved)
+                            const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => k.includes(produto.tamanho));
+                            if (sizeKey) {
+                                catalogPrice = bestMatch.tamanhos_precos[sizeKey];
+                            } else {
+                                catalogPrice = bestMatch.preco;
+                            }
+                        } else {
+                            catalogPrice = bestMatch.preco;
+                        }
+
+                        // Update metadata if missing
+                        if (!produto.codigo && bestMatch.codigo) produto.codigo = bestMatch.codigo;
+                        if (!produto.descricao && bestMatch.nome) produto.descricao = bestMatch.nome;
+
+                        console.log(`[Webhook] Assistant found product! Price: R$${catalogPrice}`);
+                    } else {
+                        console.log('[Webhook] Assistant could not find the product.');
+                    }
+                } catch (err) {
+                    console.error('[Webhook] Assistant search error:', err.message);
                 }
             }
 
             let sellPrice = null;
-
             if (catalogPrice) {
                 sellPrice = catalogPrice * markup;
                 sellPrice = Math.round(sellPrice * 100) / 100;
             }
 
-            // Build product description with code if available
+            // Build product description
             let productDescription = produto.descricao || 'Produto WhatsApp';
             if (produto.codigo) {
                 productDescription = `[${produto.codigo}] ${productDescription}`;
@@ -161,9 +231,9 @@ class WebhookController {
                 extractedColor: produto.cor,
                 catalogPrice: catalogPrice,
                 sellPrice: sellPrice,
-                imageUrl: targetImageUrl, // Will be updated below
+                imageUrl: targetImageUrl, // Can be null for text-only orders
                 quantity: produto.quantidade || 1,
-                originalMessage: textMessage,
+                originalMessage: userText,
                 status: 'PENDING'
             });
 
@@ -171,8 +241,8 @@ class WebhookController {
             console.log(`[Webhook] Order #${newOrder.id} created for: ${productDescription} | Price: ${catalogPrice ? 'R$' + catalogPrice : 'N/A'}`);
         }
 
-        // Download and save image locally (once, for the first order - all share same image)
-        if (createdOrders.length > 0) {
+        // Download and save image locally (only if there IS an image associated)
+        if (targetImageUrl && createdOrders.length > 0) {
             const localImagePath = await storageService.downloadAndSaveImage(targetImageUrl, createdOrders[0].id);
             if (localImagePath) {
                 // Update all orders with the same local image path
@@ -184,7 +254,7 @@ class WebhookController {
         }
 
         // ---------------------------------------------------------
-        // 5. INTEGRATIONS (Sheets only - Bling is manual via Dashboard)
+        // 5. INTEGRATIONS 
         // ---------------------------------------------------------
         for (const order of createdOrders) {
             try {
@@ -193,9 +263,6 @@ class WebhookController {
                 console.warn('[Webhook] Sheets integration failed (non-blocking):', sheetError.message);
             }
         }
-
-        // NOTE: Bling sync removed from here. 
-        // User will approve and sync manually via Dashboard > "Sincronizar com Bling"
 
         return `ORDERS_CREATED:${createdOrders.length}`;
     }

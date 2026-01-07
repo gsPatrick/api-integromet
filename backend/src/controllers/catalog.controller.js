@@ -1,5 +1,6 @@
 const CatalogProduct = require('../models/CatalogProduct');
 const catalogService = require('../services/catalog.service');
+const catalogAssistant = require('../services/catalogAssistant.service');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
@@ -70,7 +71,17 @@ class CatalogController {
 
             console.log(`[CatalogController] Processing PDF: ${catalogName}`);
 
-            // 1. Extract pages from PDF
+            // 1. Upload to OpenAI Assistant Vector Store (Background)
+            try {
+                console.log('[CatalogController] Uploading to OpenAI Assistant...');
+                await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
+                console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
+            } catch (assistError) {
+                console.error('[CatalogController] Assistant upload failed:', assistError.message);
+                // Non-blocking
+            }
+
+            // 2. Extract pages from PDF
             res.write(JSON.stringify({ status: 'extracting', message: 'Extraindo páginas do PDF...' }) + '\n');
 
             const pagePaths = await catalogService.extractPagesFromPdf(pdfPath, catalogName);

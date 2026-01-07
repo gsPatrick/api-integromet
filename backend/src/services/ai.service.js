@@ -117,6 +117,105 @@ REGRAS IMPORTANTES:
             throw new Error('Failed to analyze message via AI');
         }
     }
+
+    /**
+     * Analyzes a TEXT-ONLY message, using recent conversation context
+     * @param {string} userText - The current text message
+     * @param {Array} contextMessages - Recent messages from MessageContext
+     * @returns {Object} - Same format as analyzeMessage
+     */
+    async analyzeTextOrder(userText, contextMessages = []) {
+        console.log('[AiService] Analyzing text order with context...');
+
+        try {
+            // Build context for AI
+            const contextDescription = contextMessages.map(m => {
+                const type = m.messageType;
+                const content = type === 'text' ? m.textContent : `[Imagem enviada] ${m.textContent || ''}`;
+                return `User (${m.createdAt}): ${content}`;
+            }).join('\n');
+
+            // Check if there is a recent image in context
+            const lastImage = contextMessages.find(m => m.imageUrl && m.messageType !== 'text');
+
+            const messages = [
+                {
+                    role: "system",
+                    content: `Você é um assistente de vendas. O cliente mandou uma mensagem de TEXTO.
+Analise se é um PEDIDO DE VENDA.
+
+CENÁRIOS COMUNS:
+1. Lista de produtos: "Quero 1 shampoo, 2 sabonetes"
+2. Referência a imagem anterior: "1 de cada desse" (referindo-se à última foto enviada)
+3. Resposta a uma cotação: "Pode fechar", "Vou querer"
+
+CONTEXTO RECENTE:
+${contextDescription}
+
+Regras:
+- Se o texto refere-se a "esse", "desse", "da foto", use a ÚLTIMA IMAGEM do contexto.
+- Se for uma lista explícita (ex: "1 shampoo"), ignore a imagem e foque no texto.
+- Extraia os produtos com a maior precisão possível.
+
+RETORNE JSON:
+{
+  "intencao_compra": boolean,
+  "referencia_imagem_anterior": boolean (se o pedido depende da foto anterior),
+  "produtos": [
+    {
+      "descricao": "string",
+      "quantidade": number,
+      "tamanho": "string/null",
+      "observacao": "string"
+    }
+  ]
+}`
+                },
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: userText }
+                    ]
+                }
+            ];
+
+            // If there's a recent image, add it to the user message for context
+            if (lastImage && lastImage.imageUrl) {
+                messages[1].content.push({
+                    type: "text",
+                    text: "CONTEXTO VISUAL - Última imagem enviada pelo cliente:"
+                });
+                messages[1].content.push({
+                    type: "image_url",
+                    image_url: { url: lastImage.imageUrl }
+                });
+            }
+
+            const response = await axios.post(
+                this.apiUrl,
+                {
+                    model: "gpt-4o",
+                    messages,
+                    max_tokens: 800,
+                    response_format: { type: "json_object" }
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.apiKey}`
+                    }
+                }
+            );
+
+            const content = response.data.choices[0].message.content;
+            console.log('[AiService] Text Context Response:', content);
+            return JSON.parse(content);
+
+        } catch (error) {
+            console.error('[AiService] Error analyzing text context:', error.message);
+            throw new Error('Failed to analyze text order');
+        }
+    }
 }
 
 module.exports = new AiService();
