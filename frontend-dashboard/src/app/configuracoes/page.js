@@ -51,10 +51,8 @@ export default function ConfigPage() {
     };
 
     const connectBling = () => {
-        const clientId = '681206d1945f8f81504505527a00a29447280387';
-        const redirectUri = 'https://n8n-apintegromat.r954jc.easypanel.host/setup/bling';
-        const state = '123';
-        window.location.href = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${clientId}&state=${state}&redirect_uri=${redirectUri}`;
+        // Redirect to Backend to handle OAuth securely
+        window.location.href = `${api.defaults.baseURL}/auth/bling/start`;
     };
 
     return (
