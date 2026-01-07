@@ -194,6 +194,48 @@ class BlingService {
             throw error;
         }
     }
+
+    // =========================================================================
+    // CLIENT METHODS
+    // =========================================================================
+
+    async _findClient(token, phone) {
+        if (!phone) return null;
+        try {
+            // Search by phone if possible, otherwise generic search
+            // Bling API v3 search can be tricky. Let's try to list logic or exact search.
+            const response = await axios.get(`${this.baseUrl}/contatos?criterio=3&valor=${phone}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // According to V3 docs: GET /contatos returns { data: [...] }
+            if (response.data.data && response.data.data.length > 0) {
+                return response.data.data[0];
+            }
+            return null;
+        } catch (error) {
+            // 404 means not found usually
+            return null;
+        }
+    }
+
+    async _createClient(token, clientData) {
+        const payload = {
+            nome: clientData.nome || 'Cliente WhatsApp',
+            tipo: 'F', // Fisica
+            situacao: 'A', // Ativo
+        };
+
+        if (clientData.telefone) {
+            payload.celular = clientData.telefone;
+        }
+
+        console.log('[BlingService] Creating client:', payload);
+        const response = await axios.post(`${this.baseUrl}/contatos`, payload, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        return response.data.data;
+    }
 }
 
 module.exports = new BlingService();
