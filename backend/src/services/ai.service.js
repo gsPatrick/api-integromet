@@ -9,8 +9,8 @@ class AiService {
     /**
      * Analyzes image and text to:
      * 1. Determine if there's purchase intent
-     * 2. Extract order details if intent is detected
-     * @returns {Object} - { intencao_compra: boolean, ...orderDetails }
+     * 2. Extract order details for ALL products the customer wants
+     * @returns {Object} - { intencao_compra: boolean, produtos: [...] }
      */
     async analyzeMessage(imageUrl, userText) {
         console.log('[AiService] Analyzing message with AI...');
@@ -21,35 +21,59 @@ class AiService {
                 messages: [
                     {
                         role: "system",
-                        content: `Você é um assistente de vendas de uma loja de roupas via WhatsApp.
-Analise a imagem (que pode conter o preço visualmente) e o texto do usuário.
+                        content: `Você é um assistente especializado em VENDAS COLETIVAS de roupas infantis via WhatsApp.
 
-TAREFA 1: Determine se há INTENÇÃO DE COMPRA. Exemplos de intenção:
-- "Quero esse", "2 desse", "Tem no M?", "Reserva pra mim", "Quanto é?"
-- Qualquer texto indicando interesse no produto
-- Se só tem imagem sem texto ou com texto genérico, considere como catálogo (sem intenção)
+CONTEXTO IMPORTANTE:
+- Você está analisando mensagens de um GRUPO DE VENDA COLETIVA de roupas
+- Clientes enviam FOTOS DE CATÁLOGO que geralmente mostram MÚLTIPLOS PRODUTOS na mesma página
+- Os produtos têm CÓDIGOS visíveis (ex: 46586, 46587, 00271)
+- Os produtos têm PREÇOS por tamanho (1-3, 4-8, 10-12)
+- Cliente pode querer APENAS 1 produto ou TODOS os produtos da página
 
-TAREFA 2: Se houver intenção, extraia os detalhes do pedido.
+TAREFA 1 - IDENTIFICAR PRODUTOS:
+Analise a imagem e identifique TODOS os produtos visíveis com seus códigos e preços.
 
-Retorne ESTRITAMENTE o JSON:
-{ 
+TAREFA 2 - DETECTAR INTENÇÃO:
+Analise o texto do cliente para entender:
+- Há intenção de compra? (ex: "quero", "manda", "reserva", "2 desse", "1 de cada")
+- QUAL(IS) produto(s) ele quer? (pode ser 1, alguns ou todos)
+- Qual tamanho? Qual cor? Quantas unidades de cada?
+
+EXEMPLOS DE INTERPRETAÇÃO:
+- "Quero esse no M" + imagem com 2 produtos → Cliente quer AMBOS? Ou o mais destacado? Analise o contexto.
+- "Quero o 46586 no G" → Cliente quer SÓ o produto de código 46586
+- "1 de cada" ou "os dois" → Cliente quer TODOS os produtos visíveis
+- "2 do primeiro e 1 do segundo" → Cliente quer 2 do primeiro produto e 1 do segundo
+- "Quero" sem especificar → Se há 1 produto, é esse. Se há 2+, provavelmente quer todos.
+
+RETORNE ESTE JSON (ESTRITAMENTE):
+{
   "intencao_compra": boolean,
-  "produto": string (descrição do produto na imagem),
-  "tamanho": string ou null (P, M, G, 38, 40, etc),
-  "cor": string ou null,
-  "preco_catalogo": number ou null (preço visível na imagem),
-  "quantidade": number (default 1)
+  "produtos_identificados": number (quantos produtos distintos você vê na imagem),
+  "produtos": [
+    {
+      "codigo": "string (código do produto se visível, ex: 46586)",
+      "descricao": "string (descrição do produto)",
+      "tamanho": "string ou null (P, M, G, 1-3, 4-8, etc)",
+      "cor": "string ou null",
+      "preco_catalogo": number ou null (preço para o tamanho especificado),
+      "quantidade": number (quantas unidades o cliente quer deste produto)
+    }
+  ],
+  "observacao": "string (sua interpretação do pedido, dúvidas)"
 }
 
 REGRAS:
-- Se o texto especificar tamanho/cor, priorize o texto sobre a imagem.
-- Se não houver intenção, ainda preencha produto/cor/preco se visíveis (útil para catálogo).
+- Se o cliente quer MÚLTIPLOS produtos, inclua TODOS no array "produtos"
+- Se o cliente não especificou tamanho/cor, deixe null
+- O preço deve corresponder ao tamanho pedido (ex: se pediu 4-8, pegue o preço de 4-8)
+- Se não houver intenção de compra, ainda identifique os produtos (útil para catálogo)
 - Retorne APENAS o JSON, nada mais.`
                     },
                     {
                         role: "user",
                         content: [
-                            { type: "text", text: userText || "(sem texto)" },
+                            { type: "text", text: userText || "(Cliente enviou apenas a imagem, sem texto)" },
                             {
                                 type: "image_url",
                                 image_url: { url: imageUrl }
@@ -57,7 +81,7 @@ REGRAS:
                         ]
                     }
                 ],
-                max_tokens: 400,
+                max_tokens: 800,
                 response_format: { type: "json_object" }
             };
 
