@@ -16,7 +16,7 @@ class AuthController {
       return res.status(500).send('Missing BLING_CLIENT_ID or BLING_CALLBACK_URL in server environment.');
     }
 
-    const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${clientId}&state=${state}`;
+    const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${clientId}&state=${state}&redirect_uri=${callbackUrl}`;
 
     // Redirect the user's browser to Bling
     res.redirect(authUrl);
