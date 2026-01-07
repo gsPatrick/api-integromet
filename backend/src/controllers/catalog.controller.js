@@ -71,75 +71,25 @@ class CatalogController {
 
             console.log(`[CatalogController] Processing PDF: ${catalogName}`);
 
-            // 1. Upload to OpenAI Assistant Vector Store (Background)
+            // 1. Upload to OpenAI Assistant Vector Store
             try {
                 console.log('[CatalogController] Uploading to OpenAI Assistant...');
                 await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
                 console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
+
+                // Save catalog metadata to DB (dummy product to register catalog existence)
+                await CatalogProduct.create({
+                    code: 'CATALOG_META',
+                    name: `Catálogo: ${catalogName}`,
+                    category: 'METADATA',
+                    catalogName: catalogName,
+                    isActive: true
+                });
+
             } catch (assistError) {
                 console.error('[CatalogController] Assistant upload failed:', assistError.message);
-                // Non-blocking
-            }
-
-            // 2. Extract pages from PDF
-            res.write(JSON.stringify({ status: 'extracting', message: 'Extraindo páginas do PDF...' }) + '\n');
-
-            const pagePaths = await catalogService.extractPagesFromPdf(pdfPath, catalogName);
-            console.log(`[CatalogController] Extracted ${pagePaths.length} pages`);
-
-            // 2. Analyze each page with AI
-            let processedProducts = 0;
-            const allProducts = [];
-
-            for (let i = 0; i < pagePaths.length; i++) {
-                const pagePath = pagePaths[i];
-                const pageNum = i + 1;
-
-                console.log(`[CatalogController] Analyzing page ${pageNum}/${pagePaths.length}`);
-
-                try {
-                    const result = await catalogService.analyzePageWithAI(pagePath, pageNum);
-
-                    if (result.produtos && result.produtos.length > 0) {
-                        for (const produto of result.produtos) {
-                            if (!produto.codigo) continue;
-
-                            // Save to database
-                            const existing = await CatalogProduct.findOne({ where: { code: produto.codigo } });
-
-                            if (existing) {
-                                await existing.update({
-                                    name: produto.nome || existing.name,
-                                    category: produto.categoria || existing.category,
-                                    price_1_3: produto.preco_1_3 || existing.price_1_3,
-                                    price_4_8: produto.preco_4_8 || existing.price_4_8,
-                                    price_10_12: produto.preco_10_12 || existing.price_10_12,
-                                    catalogName: catalogName,
-                                    pageNumber: pageNum,
-                                    imageUrl: pagePath
-                                });
-                            } else {
-                                await CatalogProduct.create({
-                                    code: produto.codigo,
-                                    name: produto.nome,
-                                    category: produto.categoria,
-                                    price_1_3: produto.preco_1_3,
-                                    price_4_8: produto.preco_4_8,
-                                    price_10_12: produto.preco_10_12,
-                                    catalogName: catalogName,
-                                    pageNumber: pageNum,
-                                    imageUrl: pagePath,
-                                    isActive: true
-                                });
-                            }
-
-                            allProducts.push(produto);
-                            processedProducts++;
-                        }
-                    }
-                } catch (pageError) {
-                    console.error(`[CatalogController] Error on page ${pageNum}:`, pageError.message);
-                }
+                // If assistant upload fails, we should probably error out since it's now our main source
+                return res.status(500).json({ error: 'Falha ao enviar para OpenAI Assistant: ' + assistError.message });
             }
 
             // Clean up uploaded PDF
@@ -147,11 +97,11 @@ class CatalogController {
 
             res.json({
                 success: true,
-                message: 'Catálogo processado com sucesso!',
+                message: 'Catálogo enviado para IA com sucesso!',
                 catalogName,
-                pagesProcessed: pagePaths.length,
-                productsFound: processedProducts,
-                products: allProducts
+                pagesProcessed: 0,
+                productsFound: 0,
+                products: []
             });
 
         } catch (error) {

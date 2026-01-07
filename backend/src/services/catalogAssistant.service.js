@@ -1,18 +1,23 @@
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
+const SettingsController = require('../controllers/settings.controller');
 
 class CatalogAssistantService {
     constructor() {
         this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        this.assistantId = process.env.OPENAI_ASSISTANT_ID || null;
-        this.vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID || null;
+        this.assistantId = null;
+        this.vectorStoreId = null;
     }
 
     /**
      * Initializes the Assistant if not already created
      */
     async initialize() {
+        // Load IDs from settings DB
+        this.assistantId = await SettingsController.getValue('openai_assistant_id', process.env.OPENAI_ASSISTANT_ID);
+        this.vectorStoreId = await SettingsController.getValue('openai_vector_store_id', process.env.OPENAI_VECTOR_STORE_ID);
+
         if (this.assistantId && this.vectorStoreId) return;
 
         console.log('[CatalogAssistant] Initializing OpenAI Assistant...');
@@ -24,6 +29,9 @@ class CatalogAssistantService {
             });
             this.vectorStoreId = vectorStore.id;
             console.log('[CatalogAssistant] Vector Store created:', this.vectorStoreId);
+
+            // Persist for future restarts
+            await SettingsController.updateValue('openai_vector_store_id', this.vectorStoreId);
         }
 
         // 2. Create Assistant
@@ -48,7 +56,8 @@ class CatalogAssistantService {
             this.assistantId = assistant.id;
             console.log('[CatalogAssistant] Assistant created:', this.assistantId);
 
-            // TODO: Persist IDs to environment or DB (for now printed to console)
+            // Persist for future restarts
+            await SettingsController.updateValue('openai_assistant_id', this.assistantId);
         }
     }
 

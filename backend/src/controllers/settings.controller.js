@@ -56,6 +56,19 @@ class SettingsController {
             return defaultValue;
         }
     }
+
+    static async updateValue(key, value) {
+        try {
+            await Setting.upsert({
+                key,
+                value: String(value)
+            });
+            return true;
+        } catch (e) {
+            console.error('Error updating setting internal:', e);
+            return false;
+        }
+    }
 }
 
 module.exports = SettingsController;
