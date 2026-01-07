@@ -255,7 +255,7 @@ class CatalogController {
     /**
      * Static helper to find product price by code
      */
-    static async getProductPrice(code, size = null) {
+    async getProductPrice(code, size = null) {
         try {
             const product = await CatalogProduct.findOne({
                 where: {
