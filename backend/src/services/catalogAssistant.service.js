@@ -116,6 +116,8 @@ class CatalogAssistantService {
                 {
                     role: "user",
                     content: `Busque no catálogo e me informe o preço e código para: "${query}".
+                    Se a busca incluir um TAMANHO específico (ex: "tamanho G", "tamanho 4"), selecione o preço CORRESPONDENTE a esse tamanho no campo "preco".
+                    
                     Retorne APENAS um JSON no formato:
                     {
                         "encontrado": boolean,
