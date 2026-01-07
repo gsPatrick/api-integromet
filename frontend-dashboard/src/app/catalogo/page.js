@@ -1,28 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { BookOpen, Plus, Upload, Search, Trash2, Save, Loader2, AlertCircle, FileText, CheckCircle } from 'lucide-react';
+import { BookOpen, Upload, Search, Trash2, Loader2, AlertCircle, FileText, CheckCircle, Sparkles, Database } from 'lucide-react';
 import api from '../../services/api';
 
 export default function CatalogPage() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [importing, setImporting] = useState(false);
     const [uploadingPdf, setUploadingPdf] = useState(false);
     const [uploadProgress, setUploadProgress] = useState('');
     const [catalogStatus, setCatalogStatus] = useState({ totalProducts: 0, catalogs: [] });
     const fileInputRef = useRef(null);
-    const [newProduct, setNewProduct] = useState({
-        code: '',
-        name: '',
-        category: '',
-        price_1_3: '',
-        price_4_8: '',
-        price_10_12: '',
-        catalogName: ''
-    });
 
     useEffect(() => {
         fetchProducts();
@@ -58,26 +47,35 @@ export default function CatalogPage() {
             return;
         }
 
-        const catalogName = prompt('Nome do catálogo:', file.name.replace('.pdf', ''));
+        const catalogName = prompt('Nome do catálogo (ex: Inverno 2026):', file.name.replace('.pdf', ''));
         if (!catalogName) return;
 
         setUploadingPdf(true);
-        setUploadProgress('Enviando PDF...');
+        setUploadProgress('Iniciando upload...');
 
         try {
             const formData = new FormData();
             formData.append('pdf', file);
             formData.append('catalogName', catalogName);
 
-            setUploadProgress('Processando páginas com IA... Isso pode demorar alguns minutos.');
+            // Simulation messages for better UX since backend process is complex
+            const progressInterval = setInterval(() => {
+                setUploadProgress(prev => {
+                    if (prev === 'Iniciando upload...') return 'Enviando para OpenAI Assistant...';
+                    if (prev === 'Enviando para OpenAI Assistant...') return 'Extraindo produtos e preços...';
+                    return prev;
+                });
+            }, 3000);
 
             const res = await api.post('/catalog/upload-pdf', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 timeout: 600000 // 10 minutes timeout
             });
 
+            clearInterval(progressInterval);
             setUploadProgress('');
-            alert(`✅ Catálogo processado!\n\nPáginas: ${res.data.pagesProcessed}\nProdutos encontrados: ${res.data.productsFound}`);
+            alert(`✅ Catálogo processado com sucesso!\n\n📄 Páginas processadas: ${res.data.pagesProcessed}\n👗 Produtos extraídos: ${res.data.productsFound}\n🧠 AI Assistant: Atualizado`);
+
             fetchProducts();
             fetchStatus();
         } catch (error) {
@@ -90,34 +88,12 @@ export default function CatalogPage() {
         }
     };
 
-    const handleAddProduct = async () => {
-        if (!newProduct.code) {
-            alert('Código do produto é obrigatório!');
-            return;
-        }
-
-        try {
-            await api.post('/catalog/product', {
-                ...newProduct,
-                price_1_3: newProduct.price_1_3 ? parseFloat(newProduct.price_1_3) : null,
-                price_4_8: newProduct.price_4_8 ? parseFloat(newProduct.price_4_8) : null,
-                price_10_12: newProduct.price_10_12 ? parseFloat(newProduct.price_10_12) : null
-            });
-            alert('Produto adicionado!');
-            setNewProduct({ code: '', name: '', category: '', price_1_3: '', price_4_8: '', price_10_12: '', catalogName: '' });
-            setShowAddForm(false);
-            fetchProducts();
-        } catch (error) {
-            alert('Erro ao adicionar: ' + (error.response?.data?.error || error.message));
-        }
-    };
-
     const handleResetCatalog = async () => {
-        if (!confirm('Tem certeza que deseja apagar TODOS os produtos do catálogo?')) return;
+        if (!confirm('ATENÇÃO: Isso apagará TODOS os produtos do banco de dados.\n\nDeseja continuar?')) return;
 
         try {
             await api.delete('/catalog/reset');
-            alert('Catálogo resetado!');
+            alert('Catálogo resetado com sucesso!');
             fetchProducts();
             fetchStatus();
         } catch (error) {
@@ -131,200 +107,162 @@ export default function CatalogPage() {
     );
 
     return (
-        <div style={{ padding: '40px', maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
             {/* Header */}
-            <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <BookOpen size={28} color="#4caf50" />
+            <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'linear-gradient(135deg, #4caf50 0%, #8bc34a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)' }}>
+                    <BookOpen size={32} color="white" />
                 </div>
                 <div>
-                    <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Catálogo de Produtos</h1>
-                    <p style={{ color: '#636e72' }}>Importe e gerencie produtos para referência de preços</p>
+                    <h1 style={{ fontSize: '2rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '4px' }}>Catálogo Inteligente</h1>
+                    <p style={{ color: '#636e72', fontSize: '1.1rem' }}>Gerenciamento central do banco de preços e IA</p>
                 </div>
             </div>
 
-            {/* Status Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#4caf50' }}>{catalogStatus.totalProducts}</div>
-                    <div style={{ fontSize: '0.85rem', color: '#636e72' }}>Produtos no Catálogo</div>
-                </div>
-                <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2196f3' }}>{catalogStatus.catalogs?.length || 0}</div>
-                    <div style={{ fontSize: '0.85rem', color: '#636e72' }}>Catálogos Importados</div>
-                </div>
-            </div>
+            {/* Main Upload Section */}
+            <div className="card" style={{ padding: '40px', marginBottom: '32px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', textAlign: 'center', border: '2px dashed #e0e0e0' }}>
+                <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+                    <div style={{ width: '80px', height: '80px', background: '#e3f2fd', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto' }}>
+                        <Upload size={40} color="#2196f3" />
+                    </div>
 
-            {/* PDF Upload Section */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px', background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                    <FileText size={32} color="#ff9800" />
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ marginBottom: '4px' }}>Importar Catálogo PDF</h3>
-                        <p style={{ fontSize: '0.9rem', color: '#795548' }}>
-                            Faça upload do PDF do catálogo. A IA irá extrair automaticamente todos os produtos com códigos e preços.
+                    <h2 style={{ fontSize: '1.5rem', marginBottom: '12px', color: '#1a1a1a' }}>Adicionar Novo Catálogo PDF</h2>
+                    <p style={{ color: '#636e72', marginBottom: '32px', lineHeight: '1.6' }}>
+                        Faça upload do seu PDF atualizado. O sistema irá processá-lo de duas formas:
+                        <br />
+                        <strong>1. Extração Automática:</strong> Identifica códigos e preços para busca rápida.
+                        <br />
+                        <strong>2. IA Assistant:</strong> O PDF é lido pelo GPT para responder perguntas complexas.
+                    </p>
+
+                    <input
+                        type="file"
+                        accept=".pdf"
+                        ref={fileInputRef}
+                        onChange={handlePdfUpload}
+                        style={{ display: 'none' }}
+                        disabled={uploadingPdf}
+                    />
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingPdf}
+                        style={{ padding: '16px 32px', fontSize: '1.1rem', borderRadius: '12px', background: '#2196f3', boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)' }}
+                    >
+                        {uploadingPdf ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <Loader2 className="animate-spin" size={24} />
+                                {uploadProgress || 'Processando...'}
+                            </div>
+                        ) : (
+                            <>
+                                <FileText size={24} style={{ marginRight: '12px' }} />
+                                Selecionar Arquivo PDF
+                            </>
+                        )}
+                    </button>
+
+                    {uploadingPdf && (
+                        <p style={{ marginTop: '16px', fontSize: '0.9rem', color: '#f57c00' }}>
+                            ⚠️ Não feche esta página. O processamento de catálogos grandes pode levar alguns minutos.
                         </p>
-                    </div>
-                    <div>
-                        <input
-                            type="file"
-                            accept=".pdf"
-                            ref={fileInputRef}
-                            onChange={handlePdfUpload}
-                            style={{ display: 'none' }}
-                            disabled={uploadingPdf}
-                        />
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploadingPdf}
-                            style={{ minWidth: '180px' }}
-                        >
-                            {uploadingPdf ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={18} />
-                                    Processando...
-                                </>
-                            ) : (
-                                <>
-                                    <Upload size={18} />
-                                    Selecionar PDF
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {uploadProgress && (
-                    <div style={{ marginTop: '16px', padding: '12px', background: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Loader2 className="animate-spin" size={20} color="#ff9800" />
-                        <span style={{ color: '#795548' }}>{uploadProgress}</span>
-                    </div>
-                )}
-            </div>
-
-            {/* Info Box */}
-            <div className="card" style={{ padding: '16px', marginBottom: '24px', background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <AlertCircle size={24} color="#1976d2" />
-                    <div>
-                        <strong>Como funciona?</strong>
-                        <p style={{ fontSize: '0.9rem', color: '#455a64', marginTop: '4px' }}>
-                            Quando um cliente envia uma foto SEM preço visível, o sistema busca o código do produto neste catálogo
-                            para encontrar o preço correto. Isso é útil para imagens de catálogo sem informações de preço.
-                        </p>
-                    </div>
+                    )}
                 </div>
             </div>
 
-            {/* Actions Bar */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                    <div style={{ position: 'relative' }}>
-                        <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#636e72' }} />
+            {/* AI Status & Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+                <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)', border: '1px solid #eee' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <Database size={24} color="#66bb6a" />
+                        <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Banco de Dados Local</h3>
+                    </div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#2e7d32', marginBottom: '8px' }}>
+                        {catalogStatus.totalProducts}
+                    </div>
+                    <p style={{ color: '#636e72', fontSize: '0.9rem' }}>Produtos extraídos e indexados para busca de preço instantânea.</p>
+                </div>
+
+                <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)', border: '1px solid #eee' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <Sparkles size={24} color="#ab47bc" />
+                        <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Inteligência Artificial</h3>
+                    </div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#7b1fa2', marginBottom: '8px' }}>
+                        {catalogStatus.catalogs?.length > 0 ? 'Ativo e Treinado' : 'Aguardando Dados'}
+                    </div>
+                    <p style={{ color: '#636e72', fontSize: '0.9rem' }}>
+                        {catalogStatus.catalogs?.length} catálogo(s) carregado(s) no assistente virtual para consultas complexas.
+                    </p>
+                </div>
+            </div>
+
+            {/* Search & List */}
+            <div className="card" style={{ overflow: 'hidden' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid #eee', background: '#fafafa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+
+                    <div style={{ position: 'relative', flex: 1, minWidth: '300px' }}>
+                        <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#90a4ae' }} />
                         <input
                             type="text"
                             className="input"
-                            style={{ paddingLeft: '40px', width: '100%' }}
-                            placeholder="Buscar por código ou nome..."
+                            style={{ paddingLeft: '48px', height: '48px', fontSize: '1rem', width: '100%', borderRadius: '8px', border: '1px solid #cfd8dc' }}
+                            placeholder="Pesquisar produto por código ou nome..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                </div>
 
-                <button className="btn btn-secondary" onClick={() => setShowAddForm(!showAddForm)}>
-                    <Plus size={18} /> Adicionar Manual
-                </button>
-
-                <button className="btn" style={{ background: '#ffebee', color: '#c62828' }} onClick={handleResetCatalog}>
-                    <Trash2 size={18} /> Resetar
-                </button>
-            </div>
-
-            {/* Add Product Form */}
-            {showAddForm && (
-                <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-                    <h3 style={{ marginBottom: '16px' }}>Adicionar Produto Manualmente</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Código *</label>
-                            <input type="text" className="input" placeholder="46586" value={newProduct.code} onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Nome</label>
-                            <input type="text" className="input" placeholder="Conjunto..." value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Categoria</label>
-                            <input type="text" className="input" placeholder="Conjunto" value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 1-3</label>
-                            <input type="number" className="input" placeholder="141.61" value={newProduct.price_1_3} onChange={(e) => setNewProduct({ ...newProduct, price_1_3: e.target.value })} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 4-8</label>
-                            <input type="number" className="input" placeholder="161.86" value={newProduct.price_4_8} onChange={(e) => setNewProduct({ ...newProduct, price_4_8: e.target.value })} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Preço 10-12</label>
-                            <input type="number" className="input" placeholder="188.86" value={newProduct.price_10_12} onChange={(e) => setNewProduct({ ...newProduct, price_10_12: e.target.value })} />
-                        </div>
-                    </div>
-                    <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={handleAddProduct}>
-                        <Save size={18} /> Salvar
+                    <button className="btn" style={{ background: '#ffebee', color: '#c62828' }} onClick={handleResetCatalog}>
+                        <Trash2 size={18} /> Limpar Tudo
                     </button>
-                </div>
-            )}
-
-            {/* Products Table */}
-            <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ padding: '16px 24px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
-                    <strong>Produtos no Catálogo</strong>
-                    <span style={{ color: '#636e72' }}>{filteredProducts.length} produtos</span>
                 </div>
 
                 {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center' }}>
-                        <Loader2 className="animate-spin" size={32} />
+                    <div style={{ padding: '60px', textAlign: 'center' }}>
+                        <Loader2 className="animate-spin" size={40} color="#2196f3" />
                     </div>
                 ) : filteredProducts.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: '#636e72' }}>
-                        <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                        <p>Nenhum produto no catálogo</p>
-                        <p style={{ fontSize: '0.85rem' }}>Importe um PDF ou adicione produtos manualmente</p>
+                    <div style={{ padding: '60px', textAlign: 'center', color: '#90a4ae' }}>
+                        <BookOpen size={64} style={{ opacity: 0.2, marginBottom: '16px', margin: '0 auto' }} />
+                        <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>Nenhum produto encontrado</p>
+                        <p>Faça upload de um catálogo PDF para começar.</p>
                     </div>
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
+                    <div style={{ overflowX: 'auto', maxHeight: '600px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ background: '#f8f9fa' }}>
-                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Código</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Nome</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600 }}>Categoria</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>1-3</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>4-8</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>10-12</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>Pág</th>
+                            <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 10, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                <tr>
+                                    <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: 600, color: '#37474f' }}>Código</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: 600, color: '#37474f' }}>Produto</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: 600, color: '#37474f' }}>Categoria</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 600, color: '#37474f' }}>1-3</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 600, color: '#37474f' }}>4-8</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 600, color: '#37474f' }}>10-12</th>
+                                    <th style={{ padding: '16px 24px', textAlign: 'center', fontWeight: 600, color: '#37474f' }}>Pág</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredProducts.map((product) => (
-                                    <tr key={product.id} style={{ borderTop: '1px solid #eee' }}>
-                                        <td style={{ padding: '12px 16px', fontWeight: 600, color: '#1976d2' }}>{product.code}</td>
-                                        <td style={{ padding: '12px 16px' }}>{product.name || '-'}</td>
-                                        <td style={{ padding: '12px 16px' }}>{product.category || '-'}</td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                    <tr key={product.id} style={{ borderBottom: '1px solid #f0f0f0', transition: 'background 0.2s' }}>
+                                        <td style={{ padding: '16px 24px', fontWeight: 600, color: '#1976d2' }}>{product.code}</td>
+                                        <td style={{ padding: '16px 24px', fontWeight: 500 }}>{product.name || '-'}</td>
+                                        <td style={{ padding: '16px 24px', color: '#546e7a' }}>
+                                            <span style={{ background: '#eceff1', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem' }}>
+                                                {product.category || 'Geral'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '16px 24px', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.95rem' }}>
                                             {product.price_1_3 ? `R$ ${parseFloat(product.price_1_3).toFixed(2)}` : '-'}
                                         </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                        <td style={{ padding: '16px 24px', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.95rem' }}>
                                             {product.price_4_8 ? `R$ ${parseFloat(product.price_4_8).toFixed(2)}` : '-'}
                                         </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                        <td style={{ padding: '16px 24px', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.95rem' }}>
                                             {product.price_10_12 ? `R$ ${parseFloat(product.price_10_12).toFixed(2)}` : '-'}
                                         </td>
-                                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', color: '#636e72' }}>
+                                        <td style={{ padding: '16px 24px', textAlign: 'center', color: '#90a4ae', fontSize: '0.9rem' }}>
                                             {product.pageNumber || '-'}
                                         </td>
                                     </tr>
