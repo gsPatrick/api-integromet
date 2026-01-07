@@ -229,6 +229,7 @@ class WebhookController {
                 productRaw: productDescription,
                 extractedSize: produto.tamanho,
                 extractedColor: produto.cor,
+                extractedColorCode: produto.codigo_cor,
                 catalogPrice: catalogPrice,
                 sellPrice: sellPrice,
                 imageUrl: targetImageUrl, // Can be null for text-only orders

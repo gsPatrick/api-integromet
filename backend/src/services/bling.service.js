@@ -171,7 +171,14 @@ class BlingService {
                 itens: orders.map(order => {
                     // Build description with campaign info if available
                     let descricao = order.productRaw || 'Produto WhatsApp';
-                    descricao += ` (Cor: ${order.extractedColor || '-'})`;
+
+                    const details = [];
+                    if (order.extractedColor) details.push(`Cor: ${order.extractedColor}`);
+                    if (order.extractedColorCode) details.push(`Cód: ${order.extractedColorCode}`);
+                    if (order.extractedSize) details.push(`Tam: ${order.extractedSize}`);
+
+                    if (details.length > 0) descricao += ` (${details.join(', ')})`;
+
                     if (campaignDescription) {
                         descricao += ` - ${campaignDescription}`;
                     }

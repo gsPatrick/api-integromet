@@ -27,6 +27,10 @@ const Order = sequelize.define('Order', {
         type: DataTypes.STRING,
         allowNull: true
     },
+    extractedColorCode: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
     catalogPrice: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true

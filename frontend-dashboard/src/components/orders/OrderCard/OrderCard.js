@@ -56,7 +56,7 @@ export default function OrderCard({ order, onClick }) {
                     <div className={styles.productName}>{order.productRaw || 'Produto não identificado'}</div>
                     <div className={styles.meta}>
                         <span>Tam: {order.extractedSize || '-'}</span>
-                        <span>Cor: {order.extractedColor || '-'}</span>
+                        <span>Cor: {order.extractedColor || '-'}{order.extractedColorCode ? ` (${order.extractedColorCode})` : ''}</span>
                     </div>
                     <div className={styles.price}>
                         R$ {order.sellPrice ? Number(order.sellPrice).toFixed(2) : '0.00'}
