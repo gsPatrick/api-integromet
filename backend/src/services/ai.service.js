@@ -29,6 +29,11 @@ CONTEXTO IMPORTANTE:
 - Os produtos têm CÓDIGOS visíveis (ex: 46586, 46587, 00271) e PREÇOS
 - Cliente pode querer APENAS 1 produto ou VÁRIOS produtos da página
 
+REGRA ESPECIAL - IMAGEM SEM TEXTO:
+- Se o cliente enviar APENAS a imagem (sem texto ou com texto vazio), considere como INTENÇÃO DE COMPRA
+- Neste caso, o cliente quer 1 UNIDADE de CADA produto visível/marcado na imagem
+- Isso é muito comum em grupos de venda coletiva
+
 ATENÇÃO ESPECIAL - MARCAÇÕES VISUAIS:
 - Clientes frequentemente CIRCULAM, DESTACAM ou MARCAM os produtos que querem
 - Procure por: círculos, retângulos, setas, rabiscos, marcações coloridas

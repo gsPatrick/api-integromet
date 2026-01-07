@@ -9,6 +9,7 @@ const authController = require('./controllers/auth.controller');
 const importController = require('./controllers/import.controller');
 const authMiddleware = require('./middleware/auth');
 const User = require('./models/User');
+const CatalogProduct = require('./models/CatalogProduct');
 
 require('dotenv').config();
 
@@ -50,6 +51,14 @@ app.put('/settings', settingsController.update);
 app.get('/customers', CustomerController.listCustomers);
 app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
 app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
+
+// Catalog Routes
+const catalogController = require('./controllers/catalog.controller');
+app.get('/catalog', catalogController.listProducts);
+app.post('/catalog/product', catalogController.addProduct);
+app.post('/catalog/import', catalogController.bulkImport);
+app.get('/catalog/search/:code', catalogController.searchByCode);
+app.delete('/catalog/reset', catalogController.resetCatalog);
 
 // Protected Routes (Require x-api-token)
 app.use('/orders', authMiddleware);

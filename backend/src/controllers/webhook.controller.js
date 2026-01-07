@@ -118,13 +118,27 @@ class WebhookController {
 
         // Fetch markup setting
         const SettingsController = require('./settings.controller');
+        const CatalogController = require('./catalog.controller');
         const markupPercentage = await SettingsController.getValue('markup_percentage', 35);
         const markup = 1 + (Number(markupPercentage) / 100);
 
         const createdOrders = [];
 
         for (const produto of produtos) {
-            const catalogPrice = produto.preco_catalogo ? parseFloat(produto.preco_catalogo) : null;
+            let catalogPrice = produto.preco_catalogo ? parseFloat(produto.preco_catalogo) : null;
+
+            // If no price from AI, try to find in our catalog by product code
+            if (!catalogPrice && produto.codigo) {
+                console.log(`[Webhook] No price in image. Looking up code ${produto.codigo} in catalog...`);
+                const catalogLookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
+                if (catalogLookup) {
+                    catalogPrice = parseFloat(catalogLookup);
+                    console.log(`[Webhook] Found price in catalog: R$${catalogPrice}`);
+                } else {
+                    console.log(`[Webhook] Code ${produto.codigo} not found in catalog.`);
+                }
+            }
+
             let sellPrice = null;
 
             if (catalogPrice) {
@@ -150,11 +164,11 @@ class WebhookController {
                 imageUrl: targetImageUrl, // Will be updated below
                 quantity: produto.quantidade || 1,
                 originalMessage: textMessage,
-                status: catalogPrice ? 'PENDING' : 'PENDING'
+                status: 'PENDING'
             });
 
             createdOrders.push(newOrder);
-            console.log(`[Webhook] Order #${newOrder.id} created for: ${productDescription}`);
+            console.log(`[Webhook] Order #${newOrder.id} created for: ${productDescription} | Price: ${catalogPrice ? 'R$' + catalogPrice : 'N/A'}`);
         }
 
         // Download and save image locally (once, for the first order - all share same image)
