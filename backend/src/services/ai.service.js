@@ -86,6 +86,9 @@ REGRAS IMPORTANTES:
 - Se NÃO há marcações, use o texto para determinar quais produtos o cliente quer
 - Tente extrair o CÓDIGO DA COR sempre que possível (geralmente 6 dígitos próximos à peça)
 - O preço deve corresponder ao TAMANHO escolhido (olhe a tabela de preços na imagem)
+    - IMPORTANTE: Se o cliente pedir um tamanho (ex: "2") e a imagem mostrar um intervalo (ex: "1-3"), considere que o tamanho ESTÁ INCLUÍDO no intervalo e use aquele preço.
+    - Exemplo: Cliente pede "tam 2", Imagem tem "1-3 R$ 80,00". Preço = 80.00.
+    - Exemplo: Cliente pede "tam 6", Imagem tem "4-8 R$ 90,00". Preço = 90.00.
 - Retorne APENAS o JSON, nada mais.`
                     },
                     {
