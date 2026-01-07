@@ -217,21 +217,84 @@ class BlingService {
 
     async _findClient(token, phone) {
         if (!phone) return null;
-        try {
-            // Search by phone if possible, otherwise generic search
-            // Bling API v3 search can be tricky. Let's try to list logic or exact search.
-            const response = await axios.get(`${this.baseUrl}/contatos?criterio=3&valor=${phone}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            // According to V3 docs: GET /contatos returns { data: [...] }
-            if (response.data.data && response.data.data.length > 0) {
-                return response.data.data[0];
+
+        // Clean the phone number - remove all non-digits
+        const cleanPhone = phone.replace(/\D/g, '');
+
+        // Generate all possible variations
+        const variations = this._generatePhoneVariations(cleanPhone);
+        console.log(`[BlingService] Trying ${variations.length} phone variations:`, variations);
+
+        for (const variation of variations) {
+            try {
+                const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${variation}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (response.data.data && response.data.data.length > 0) {
+                    console.log(`[BlingService] ✓ Found client with variation: ${variation}`);
+                    return response.data.data[0];
+                }
+            } catch (error) {
+                // Continue to next variation
             }
-            return null;
-        } catch (error) {
-            // 404 means not found usually
-            return null;
         }
+
+        console.log(`[BlingService] ✗ No client found with any phone variation`);
+        return null;
+    }
+
+    /**
+     * Generate all possible phone number variations for Brazil
+     * Example input: 5511999998888
+     * Variations: 5511999998888, 11999998888, 55119999988, 119999988, etc.
+     */
+    _generatePhoneVariations(phone) {
+        const variations = new Set();
+
+        // Add original
+        variations.add(phone);
+
+        // If starts with 55 (Brazil country code), try without it
+        if (phone.startsWith('55') && phone.length >= 12) {
+            const withoutCountry = phone.substring(2);
+            variations.add(withoutCountry);
+
+            // If has 9th digit (cell phones), try without it
+            // Format: DDD (2 digits) + 9 + 8 digits = 11 digits without country code
+            if (withoutCountry.length === 11 && withoutCountry[2] === '9') {
+                const without9 = withoutCountry.substring(0, 2) + withoutCountry.substring(3);
+                variations.add(without9);
+                variations.add('55' + without9);
+            }
+
+            // Try adding 9 if missing (older numbers)
+            if (withoutCountry.length === 10) {
+                const with9 = withoutCountry.substring(0, 2) + '9' + withoutCountry.substring(2);
+                variations.add(with9);
+                variations.add('55' + with9);
+            }
+        }
+
+        // If doesn't start with 55, try adding it
+        if (!phone.startsWith('55')) {
+            variations.add('55' + phone);
+
+            // Handle the 9th digit variations
+            if (phone.length === 11 && phone[2] === '9') {
+                const without9 = phone.substring(0, 2) + phone.substring(3);
+                variations.add(without9);
+                variations.add('55' + without9);
+            }
+
+            if (phone.length === 10) {
+                const with9 = phone.substring(0, 2) + '9' + phone.substring(2);
+                variations.add(with9);
+                variations.add('55' + with9);
+            }
+        }
+
+        return Array.from(variations);
     }
 
     async _createClient(token, clientData) {
