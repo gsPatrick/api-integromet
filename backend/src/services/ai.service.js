@@ -89,7 +89,20 @@ REGRAS IMPORTANTES:
     - IMPORTANTE: Se o cliente pedir um tamanho (ex: "2") e a imagem mostrar um intervalo (ex: "1-3"), considere que o tamanho ESTÁ INCLUÍDO no intervalo e use aquele preço.
     - Exemplo: Cliente pede "tam 2", Imagem tem "1-3 R$ 80,00". Preço = 80.00.
     - Exemplo: Cliente pede "tam 6", Imagem tem "4-8 R$ 90,00". Preço = 90.00.
-- Retorne APENAS o JSON, nada mais.`
+- Retorne APENAS o JSON, nada mais.
+
+REGRAS CRÍTICAS PARA TAMANHO E PREÇO:
+1. O campo "tamanho" deve ser EXATAMENTE o que o cliente pediu (ex: se pediu "2", salve "2").
+2. NÃO salve o intervalo do catálogo como tamanho (ex: NÃO salve "1-3").
+3. Use o intervalo APENAS para descobrir o preço correto.
+    - Cenário: Cliente pediu "2". Catálogo mostra "1-3 R$ 80,00".
+    - Ação: Salve tamanho="2". Salve preco_catalogo=80.00.
+
+REGRAS DE CONTEXTO (NUMEROS SOLTOS):
+- Se o cliente mandar um número solto (ex: "2", "4", "6") junto com uma IMAGEM CIRCULADA:
+    - 99% de chance de ser o TAMANHO, especialmente em roupas infantis.
+    - Se o número coincidir com uma opção de tamanho na grade, trate como TAMANHO.
+    - Só trate como QUANTIDADE se o cliente disser "peças", "unidades" ou "reserva 2".`
                     },
                     {
                         role: "user",
