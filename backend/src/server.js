@@ -95,6 +95,7 @@ app.delete('/catalog/reset', catalogController.resetCatalog);
 app.use('/orders', authMiddleware);
 
 app.get('/orders', orderController.listOrders);
+app.post('/orders/send-confirmation', orderController.sendConfirmation.bind(orderController));
 app.get('/orders/:id', orderController.getOrder);
 app.put('/orders/:id', orderController.updateOrder);
 app.post('/orders/:id/sync-bling', orderController.syncOrderToBling.bind(orderController));

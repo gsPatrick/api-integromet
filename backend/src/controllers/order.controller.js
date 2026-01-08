@@ -139,6 +139,137 @@ class OrderController {
             res.status(500).json({ error: 'Sync failed: ' + error.message });
         }
     }
+    /**
+     * Send Confirmation Message to Customer via WhatsApp
+     * POST /orders/send-confirmation
+     * Body: { orderIds: [1, 2, 3] }
+     */
+    async sendConfirmation(req, res) {
+        const WhatsappService = require('../services/whatsapp.service');
+        const SettingsController = require('./settings.controller');
+
+        try {
+            const { orderIds } = req.body;
+            if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+                return res.status(400).json({ error: 'No orderIds provided' });
+            }
+
+            // Fetch orders
+            const orders = await Order.findAll({
+                where: {
+                    id: { [require('sequelize').Op.in]: orderIds }
+                }
+            });
+
+            if (orders.length === 0) {
+                return res.status(404).json({ error: 'No orders found' });
+            }
+
+            // Get Settings
+            const campaignDescription = await SettingsController.getValue('campaign_description', '');
+
+            // Group by Phone
+            const grouped = {};
+            for (const order of orders) {
+                const phone = (order.customerPhone || '').replace(/\D/g, '');
+                if (!phone) continue; // Skip orders without phone
+
+                if (!grouped[phone]) {
+                    grouped[phone] = {
+                        customerName: order.customerName,
+                        items: []
+                    };
+                }
+                grouped[phone].items.push(order);
+            }
+
+            let sentCount = 0;
+            const errors = [];
+
+            // Process each customer group
+            for (const [phone, group] of Object.entries(grouped)) {
+                try {
+                    // Build Item List
+                    const itemLines = group.items.map(o => {
+                        const qty = o.quantity || 1;
+                        const price = parseFloat(o.sellPrice || 0).toFixed(2);
+                        const cleanDesc = (o.productRaw || 'Produto').replace(/^\[[\w-]+\]\s*/, '');
+                        const details = [];
+                        if (o.extractedSize) details.push(`Tam: ${o.extractedSize}`);
+                        if (o.extractedColor) details.push(`Cor: ${o.extractedColor}`);
+                        const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+                        return `• ${qty}x ${cleanDesc}${detailStr} - R$ ${price}`;
+                    });
+
+                    // Calculate Total
+                    const totalVal = group.items.reduce((acc, curr) => acc + (parseFloat(curr.sellPrice || 0) * (curr.quantity || 1)), 0);
+                    const totalStr = totalVal.toFixed(2).replace('.', ',');
+
+                    // Build Message
+                    const message = `Olá, tudo bem?
+
+Aqui está um resumo do seu pedido da ${campaignDescription || 'Campanha'} 🥳
+
+ATENÇÃO ⚠⚠
+
+🚚 Estimativa de entrega:
+15 dias úteis
+
+✅ Confira o produto, a quantidade e o valor, pois não fazemos trocas. Caso esteja tudo correto, pedimos que faça a confirmação, o pagamento e nos envie o comprovante.
+
+*O silêncio será considerado como aprovação*
+
+💰 Pix:
+51533293000103
+Favorecido: Brinca Comigo Comércio de Brinquedos Ltda.
+
+💳Se preferir, você pode pagar com cartão de crédito através de um link com acréscimo de 5% em até 3x, com parcelas mínimas de R$ 100,00.
+
+O frete será cobrado separadamente, após a chegada dos produtos e alguns dias antes da rota do motoboy.
+
+🛵 R$ 15,00 dentro de Brasília para pedidos que caibam no baú do motoboy.
+
+🚗 R$ 20,00 quando for necessária entrega por carro (para pedidos maiores).
+
+Ou retirada no Scia - seg a sexta de 9h às 16h (avisar com antecedência)
+
+Caso o endereço de entrega seja diferente do registrado na Nota Fiscal, avise-nos com antecedência para que possamos corrigir a informação e evitar a cobrança de uma nova taxa de entrega.
+
+RESUMO DO PEDIDO:
+${itemLines.join('\n')}
+
+*Total do Pedido: R$ ${totalStr}*`;
+
+                    // Send via Z-API
+                    // Phone needs to be formatted for Z-API? Usually just DDD+Number (e.g. 556199999999)
+                    // My 'phone' key variable is stripped digits.
+                    // If it doesn't start with country code, prepend 55 (assuming BR)
+                    let sendPhone = phone;
+                    if (!sendPhone.startsWith('55') && sendPhone.length <= 11) {
+                        sendPhone = '55' + sendPhone;
+                    }
+
+                    await WhatsappService.sendText(sendPhone, message);
+                    sentCount++;
+
+                } catch (err) {
+                    console.error(`Failed to send confirmation to ${phone}:`, err.message);
+                    errors.push({ phone, error: err.message });
+                }
+            }
+
+            res.json({
+                message: 'Process completed',
+                sent: sentCount,
+                errors: errors
+            });
+
+        } catch (error) {
+            console.error('[OrderController] Send Confirmation failed:', error);
+            res.status(500).json({ error: 'Process failed' });
+        }
+    }
 }
 
 module.exports = new OrderController();

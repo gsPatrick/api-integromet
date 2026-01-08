@@ -43,6 +43,30 @@ class WhatsappService {
     }
 
     /**
+     * Sends a text message via Z-API
+     */
+    async sendText(phone, message) {
+        try {
+            console.log(`[WhatsappService] Sending text to ${phone}`);
+
+            await axios.post(
+                `${BASE_URL}/send-text`,
+                {
+                    phone: phone,
+                    message: message
+                },
+                {
+                    headers: { 'Client-Token': CLIENT_TOKEN }
+                }
+            );
+            return true;
+        } catch (error) {
+            console.error('[WhatsappService] Error sending text:', error.response?.data || error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Resolves the image URL context for a given message payload.
      * Logic:
      * 1. If payload has image -> use it.
