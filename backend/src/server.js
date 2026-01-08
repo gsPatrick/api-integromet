@@ -107,7 +107,7 @@ async function startServer() {
         // Attach sequelize to app for easier access if needed, though it's already imported
         app.sequelize = sequelize;
 
-        app.sequelize.sync({ force: true }).then(() => {
+        app.sequelize.sync({ alter: true }).then(() => {
             console.log('Database synced (ALTER mode - Data preserved)');
 
             // Seed Default Admin User
