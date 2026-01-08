@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import OrderCard from '../../components/orders/OrderCard/OrderCard';
 import EditModal from '../../components/orders/EditModal/EditModal';
+import MessagePreviewModal from '../../components/orders/MessagePreviewModal/MessagePreviewModal';
 import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2, MessageSquare } from 'lucide-react';
 
 export default function Dashboard() {
@@ -13,12 +14,12 @@ export default function Dashboard() {
     const [expandedCustomers, setExpandedCustomers] = useState({});
     const [selectedOrders, setSelectedOrders] = useState({}); // { orderId: true/false }
     const [syncing, setSyncing] = useState(null); // phone of customer currently syncing
-    const [sendingMsg, setSendingMsg] = useState(null); // phone of customer currently sending msg
+    const [previewData, setPreviewData] = useState(null); // { group, selectedIds }
 
     // ... (fetchOrders, toggleExpand, etc remain same, skipping lines)
 
-    // Send Confirmation Message
-    const handleSendConfirmation = async (group) => {
+    // Open Confirmation Preview
+    const handleSendConfirmation = (group) => {
         const selectedIds = getSelectedIdsForCustomer(group);
 
         if (selectedIds.length === 0) {
@@ -26,17 +27,7 @@ export default function Dashboard() {
             return;
         }
 
-        if (!confirm(`Deseja enviar a mensagem de confirmação para ${group.customerName || 'Cliente'} referente a ${selectedIds.length} pedido(s)?`)) return;
-
-        setSendingMsg(group.customerPhone);
-        try {
-            const res = await api.post('/orders/send-confirmation', { orderIds: selectedIds });
-            alert(`Mensagem enviada com sucesso! (${res.data.sent} enviadas)`);
-        } catch (err) {
-            alert('Erro ao enviar mensagem: ' + (err.response?.data?.error || err.message));
-        } finally {
-            setSendingMsg(null);
-        }
+        setPreviewData({ group, selectedIds });
     };
 
     // ... (rest of code)
@@ -46,7 +37,7 @@ export default function Dashboard() {
         {selectedCount > 0 && (
             <button
                 onClick={(e) => { e.stopPropagation(); handleSendConfirmation(group); }}
-                disabled={!!sendingMsg}
+                disabled={!!previewData} // Disable if preview modal is open
                 style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
@@ -61,7 +52,8 @@ export default function Dashboard() {
                     gap: '6px'
                 }}
             >
-                {sendingMsg === group.customerPhone ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                {/* Loader for sending is now inside the modal */}
+                <MessageSquare size={14} />
                 Enviar Confirmação
             </button>
         )}
@@ -178,6 +170,20 @@ export default function Dashboard() {
             order={selectedOrder}
             onClose={() => setSelectedOrder(null)}
             onSave={() => { setSelectedOrder(null); fetchOrders(); }}
+        />
+    )
+}
+{/* Message Preview Modal */ }
+{
+    previewData && (
+        <MessagePreviewModal
+            group={previewData.group}
+            selectedIds={previewData.selectedIds}
+            onClose={() => setPreviewData(null)}
+            onSuccess={(count) => {
+                setPreviewData(null);
+                alert(`Sucesso! Mensagem enviada para o cliente.`);
+            }}
         />
     )
 }
