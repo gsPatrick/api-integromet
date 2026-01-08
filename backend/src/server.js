@@ -80,7 +80,7 @@ const pdfUpload = multer({
             cb(new Error('Only PDF files are allowed'), false);
         }
     },
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB max
+    limits: { fileSize: 600 * 1024 * 1024 } // 600MB max
 });
 
 app.get('/catalog', catalogController.listProducts);
