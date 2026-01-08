@@ -149,7 +149,7 @@ class OrderController {
         const SettingsController = require('./settings.controller');
 
         try {
-            const { orderIds } = req.body;
+            const { orderIds, preview, customMessage } = req.body;
             if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
                 return res.status(400).json({ error: 'No orderIds provided' });
             }
@@ -183,31 +183,86 @@ class OrderController {
                 grouped[phone].items.push(order);
             }
 
+            // If PREVIEW: Generate message for the first group (assuming bulk action usually for one client context in preview, or return array of previews?
+            // User usually selects one client's orders.
+            // If multiple clients selected, previewing is tricky.
+            // Requirement says "Enviar para o privado". Usually per client.
+            // For now, let's assume if Preview is requested, we return the generated message for the FIRST client found.
+
+            if (preview) {
+                const firstPhone = Object.keys(grouped)[0];
+                if (!firstPhone) return res.status(400).json({ error: 'No valid phone numbers found in selection' });
+
+                const group = grouped[firstPhone];
+                const generatedMsg = await this._generateMessage(group, campaignDescription);
+
+                return res.json({
+                    preview: true,
+                    message: generatedMsg,
+                    phone: firstPhone,
+                    customerName: group.customerName
+                });
+            }
+
             let sentCount = 0;
             const errors = [];
 
             // Process each customer group
             for (const [phone, group] of Object.entries(grouped)) {
                 try {
-                    // Build Item List
-                    const itemLines = group.items.map(o => {
-                        const qty = o.quantity || 1;
-                        const price = parseFloat(o.sellPrice || 0).toFixed(2);
-                        const cleanDesc = (o.productRaw || 'Produto').replace(/^\[[\w-]+\]\s*/, '');
-                        const details = [];
-                        if (o.extractedSize) details.push(`Tam: ${o.extractedSize}`);
-                        if (o.extractedColor) details.push(`Cor: ${o.extractedColor}`);
-                        const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+                    // Use Custom Message if provided, otherwise generate
+                    const message = customMessage || await this._generateMessage(group, campaignDescription);
 
-                        return `• ${qty}x ${cleanDesc}${detailStr} - R$ ${price}`;
-                    });
+                    // Send via Z-API
+                    let sendPhone = phone;
+                    if (!sendPhone.startsWith('55') && sendPhone.length <= 11) {
+                        sendPhone = '55' + sendPhone;
+                    }
 
-                    // Calculate Total
-                    const totalVal = group.items.reduce((acc, curr) => acc + (parseFloat(curr.sellPrice || 0) * (curr.quantity || 1)), 0);
-                    const totalStr = totalVal.toFixed(2).replace('.', ',');
+                    await WhatsappService.sendText(sendPhone, message);
+                    sentCount++;
 
-                    // Build Message
-                    const message = `Olá, tudo bem?
+                } catch (err) {
+                    console.error(`Failed to send confirmation to ${phone}:`, err.message);
+                    errors.push({ phone, error: err.message });
+                }
+            }
+
+            res.json({
+                message: 'Process completed',
+                sent: sentCount,
+                errors: errors
+            });
+
+        } catch (error) {
+            console.error('[OrderController] Send Confirmation failed:', error);
+            res.status(500).json({ error: 'Process failed' });
+        }
+    }
+
+    /**
+     * Helper to generate the text message
+     */
+    async _generateMessage(group, campaignDescription) {
+        // Build Item List
+        const itemLines = group.items.map(o => {
+            const qty = o.quantity || 1;
+            const price = parseFloat(o.sellPrice || 0).toFixed(2);
+            const cleanDesc = (o.productRaw || 'Produto').replace(/^\[[\w-]+\]\s*/, '');
+            const details = [];
+            if (o.extractedSize) details.push(`Tam: ${o.extractedSize}`);
+            if (o.extractedColor) details.push(`Cor: ${o.extractedColor}`);
+            const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+            return `• ${qty}x ${cleanDesc}${detailStr} - R$ ${price}`;
+        });
+
+        // Calculate Total
+        const totalVal = group.items.reduce((acc, curr) => acc + (parseFloat(curr.sellPrice || 0) * (curr.quantity || 1)), 0);
+        const totalStr = totalVal.toFixed(2).replace('.', ',');
+
+        // Build Message
+        return `Olá, tudo bem?
 
 Aqui está um resumo do seu pedido da ${campaignDescription || 'Campanha'} 🥳
 
@@ -240,36 +295,9 @@ RESUMO DO PEDIDO:
 ${itemLines.join('\n')}
 
 *Total do Pedido: R$ ${totalStr}*`;
-
-                    // Send via Z-API
-                    // Phone needs to be formatted for Z-API? Usually just DDD+Number (e.g. 556199999999)
-                    // My 'phone' key variable is stripped digits.
-                    // If it doesn't start with country code, prepend 55 (assuming BR)
-                    let sendPhone = phone;
-                    if (!sendPhone.startsWith('55') && sendPhone.length <= 11) {
-                        sendPhone = '55' + sendPhone;
-                    }
-
-                    await WhatsappService.sendText(sendPhone, message);
-                    sentCount++;
-
-                } catch (err) {
-                    console.error(`Failed to send confirmation to ${phone}:`, err.message);
-                    errors.push({ phone, error: err.message });
-                }
-            }
-
-            res.json({
-                message: 'Process completed',
-                sent: sentCount,
-                errors: errors
-            });
-
-        } catch (error) {
-            console.error('[OrderController] Send Confirmation failed:', error);
-            res.status(500).json({ error: 'Process failed' });
-        }
     }
+
+
 }
 
 module.exports = new OrderController();
