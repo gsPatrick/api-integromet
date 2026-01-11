@@ -115,16 +115,32 @@ class CatalogAssistantService {
             messages: [
                 {
                     role: "user",
-                    content: `Busque no catálogo e me informe o preço e código para: "${query}".
-                    Se a busca incluir um TAMANHO específico (ex: "tamanho G", "tamanho 4"), selecione o preço CORRESPONDENTE a esse tamanho no campo "preco".
+                    content: `Busque nos catálogos PDF e encontre informações sobre: "${query}".
                     
-                    Retorne APENAS um JSON no formato:
+                    IMPORTANTE:
+                    - Busque por código, nome, descrição ou qualquer parte que coincida
+                    - Se encontrar algo parecido, retorne mesmo que não seja exato
+                    - Procure em TODOS os catálogos disponíveis
+                    - Se houver variação por tamanho, inclua todos os preços
+                    - Preços podem estar em formatos como "R$ 99,90" ou "99.90"
+                    
+                    Retorne APENAS um JSON válido no formato:
                     {
-                        "encontrado": boolean,
+                        "encontrado": true/false,
                         "produtos": [
-                            { "codigo": "string", "nome": "string", "preco": number, "tamanhos_precos": { "1-3": 0, "4-8": 0 }, "codigo_cor": "string" }
-                        ]
-                    }`
+                            { 
+                                "codigo": "código do produto", 
+                                "nome": "nome completo", 
+                                "preco": 99.90, 
+                                "tamanhos_precos": { "P": 89.90, "M": 99.90, "G": 109.90 }, 
+                                "codigo_cor": "código da cor se houver",
+                                "confianca": "alta/media/baixa"
+                            }
+                        ],
+                        "observacao": "qualquer nota relevante"
+                    }
+                    
+                    Se não encontrar NADA, retorne: {"encontrado": false, "produtos": [], "observacao": "motivo"}`
                 }
             ]
         });
