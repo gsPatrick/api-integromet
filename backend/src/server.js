@@ -24,8 +24,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-token', 'Accept']
 }));
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.json({ limit: '10gb' })); // Effectively unlimited
+app.use(express.urlencoded({ extended: true, limit: '10gb' }));
 
 // Serve static files (uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
