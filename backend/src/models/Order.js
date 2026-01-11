@@ -40,7 +40,7 @@ const Order = sequelize.define('Order', {
         allowNull: true
     },
     status: {
-        type: DataTypes.ENUM('PENDING', 'PROCESSED', 'ERROR'),
+        type: DataTypes.ENUM('PENDING', 'PROCESSED', 'ERROR', 'PENDING_PAYMENT', 'PAID'),
         defaultValue: 'PENDING'
     },
     imageUrl: {
@@ -58,6 +58,22 @@ const Order = sequelize.define('Order', {
     blingSyncedAt: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    // Asaas Integration Fields
+    paymentLink: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        comment: 'URL do link de pagamento Asaas'
+    },
+    asaasId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        comment: 'ID da cobrança no Asaas (pay_...)'
+    },
+    blingId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'ID do pedido retornado pelo Bling'
     }
 }, {
     tableName: 'orders',
@@ -65,3 +81,4 @@ const Order = sequelize.define('Order', {
 });
 
 module.exports = Order;
+

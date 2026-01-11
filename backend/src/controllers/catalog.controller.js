@@ -1,6 +1,7 @@
 const CatalogProduct = require('../models/CatalogProduct');
 const catalogService = require('../services/catalog.service');
 const catalogAssistant = require('../services/catalogAssistant.service');
+const catalogMarkupService = require('../services/catalogMarkup.service');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
@@ -77,12 +78,13 @@ class CatalogController {
                 await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
                 console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
 
-                // Save catalog metadata to DB (dummy product to register catalog existence)
+                // Save catalog metadata to DB (with pdfPath for markup feature)
                 await CatalogProduct.create({
                     code: 'CATALOG_META',
                     name: `Catálogo: ${catalogName}`,
                     category: 'METADATA',
                     catalogName: catalogName,
+                    pdfPath: pdfPath, // Keep path for markup generation
                     isActive: true
                 });
 
@@ -92,13 +94,14 @@ class CatalogController {
                 return res.status(500).json({ error: 'Falha ao enviar para OpenAI Assistant: ' + assistError.message });
             }
 
-            // Clean up uploaded PDF
-            fs.unlinkSync(pdfPath);
+            // NOTE: PDF file is kept in public/uploads/catalogs for markup generation
+            // It is NOT deleted after upload
 
             res.json({
                 success: true,
                 message: 'Catálogo enviado para IA com sucesso!',
                 catalogName,
+                pdfPath: pdfPath, // Return path for frontend reference
                 pagesProcessed: 0,
                 productsFound: 0,
                 products: []
@@ -297,6 +300,66 @@ class CatalogController {
         } catch (error) {
             console.error('[CatalogController] Error resetting catalog:', error);
             res.status(500).json({ error: 'Failed to reset catalog' });
+        }
+    }
+
+    /**
+     * Generate PDF with markup applied to prices
+     * POST /catalog/generate-markup
+     */
+    async generateMarkup(req, res) {
+        try {
+            const { catalogName, markupPercentage } = req.body;
+
+            if (!catalogName) {
+                return res.status(400).json({ error: 'Nome do catálogo é obrigatório' });
+            }
+
+            if (markupPercentage === undefined || markupPercentage < 0) {
+                return res.status(400).json({ error: 'Porcentagem de markup inválida' });
+            }
+
+            // Find the catalog record with pdfPath
+            const catalog = await CatalogProduct.findOne({
+                where: {
+                    catalogName: catalogName,
+                    code: 'CATALOG_META'
+                }
+            });
+
+            if (!catalog || !catalog.pdfPath) {
+                return res.status(404).json({
+                    error: 'Catálogo não encontrado ou PDF não disponível. Faça upload novamente.'
+                });
+            }
+
+            // Check if file still exists
+            if (!fs.existsSync(catalog.pdfPath)) {
+                return res.status(404).json({
+                    error: 'Arquivo PDF não encontrado no servidor. Faça upload novamente.'
+                });
+            }
+
+            console.log(`[CatalogController] Generating markup PDF for: ${catalogName} with ${markupPercentage}%`);
+
+            // Generate the markup PDF
+            const result = await catalogMarkupService.generateMarkupPdf(
+                catalog.pdfPath,
+                parseFloat(markupPercentage)
+            );
+
+            // Return the file for download
+            res.download(result.outputPath, result.outputFilename, (err) => {
+                if (err) {
+                    console.error('[CatalogController] Error sending file:', err);
+                }
+                // Optionally delete the generated file after download
+                // fs.unlinkSync(result.outputPath);
+            });
+
+        } catch (error) {
+            console.error('[CatalogController] Error generating markup PDF:', error);
+            res.status(500).json({ error: 'Falha ao gerar PDF com markup: ' + error.message });
         }
     }
 }

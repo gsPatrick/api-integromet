@@ -26,6 +26,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // Public Routes
 app.post('/webhook', webhookController.handleWebhook);
+app.post('/webhook/asaas', webhookController.handleAsaasWebhook.bind(webhookController)); // Asaas payment webhook
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 const SettingsController = require('./controllers/settings.controller');
@@ -90,12 +91,14 @@ app.post('/catalog/import', catalogController.bulkImport);
 app.post('/catalog/upload-pdf', pdfUpload.single('pdf'), catalogController.uploadPdf);
 app.get('/catalog/search/:code', catalogController.searchByCode);
 app.delete('/catalog/reset', catalogController.resetCatalog);
+app.post('/catalog/generate-markup', catalogController.generateMarkup);
 
 // Protected Routes (Require x-api-token)
 app.use('/orders', authMiddleware);
 
 app.get('/orders', orderController.listOrders);
 app.post('/orders/send-confirmation', orderController.sendConfirmation.bind(orderController));
+app.post('/orders/generate-link-sync', orderController.generateLinkSync.bind(orderController)); // Asaas + Bling sync
 app.get('/orders/:id', orderController.getOrder);
 app.put('/orders/:id', orderController.updateOrder);
 app.post('/orders/:id/sync-bling', orderController.syncOrderToBling.bind(orderController));

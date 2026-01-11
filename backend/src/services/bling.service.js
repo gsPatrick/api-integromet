@@ -228,6 +228,9 @@ class BlingService {
             const payload = {
                 data: new Date().toISOString().split('T')[0],
                 itens: orderItems,
+                situacao: {
+                    valor: 'Em aberto' // Initial status - will change to "Atendido" when paid
+                },
                 observacoes: `Pedido via WhatsApp. IDs: ${orders.map(o => o.id).join(', ')}. Cliente: ${mainOrder.customerName}${campaignDescription ? `. Campanha: ${campaignDescription}` : ''}`
             };
 
@@ -487,6 +490,48 @@ class BlingService {
 
             console.error('[BlingService] Failed to create product:', JSON.stringify(error.response?.data || error.message, null, 2));
             throw error;
+        }
+    }
+
+    // =========================================================================
+    // ORDER STATUS METHODS
+    // =========================================================================
+
+    /**
+     * Update order status/situação in Bling
+     * @param {number} blingOrderId - Bling order ID
+     * @param {string} situacao - Status name (e.g., "Atendido", "Em aberto", "Cancelado")
+     * @returns {boolean} - Success status
+     */
+    async updateOrderStatus(blingOrderId, situacao) {
+        try {
+            const token = await this.getValidToken();
+
+            console.log(`[BlingService] Updating order ${blingOrderId} to status: ${situacao}`);
+
+            await this._sleep(350); // Rate limit protection
+
+            const response = await axios.put(
+                `${this.baseUrl}/pedidos/vendas/${blingOrderId}`,
+                {
+                    situacao: {
+                        valor: situacao
+                    }
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            console.log(`[BlingService] ✓ Order ${blingOrderId} status updated to ${situacao}`);
+            return true;
+        } catch (error) {
+            console.error(`[BlingService] Failed to update order status:`, error.response?.data || error.message);
+            // Don't throw - status update failure shouldn't break the flow
+            return false;
         }
     }
 }

@@ -280,6 +280,102 @@ class WebhookController {
 
         return `ORDERS_CREATED:${createdOrders.length}`;
     }
+
+    // ==========================================================================
+    // ASAAS WEBHOOK - Payment Confirmation
+    // ==========================================================================
+
+    /**
+     * Handle Asaas payment webhooks
+     * POST /webhook/asaas
+     * Events: PAYMENT_RECEIVED, PAYMENT_CONFIRMED
+     */
+    async handleAsaasWebhook(req, res) {
+        const asaasService = require('../services/asaas.service');
+        const blingService = require('../services/bling.service');
+        const SettingsController = require('./settings.controller');
+
+        try {
+            const { event, payment } = req.body;
+
+            console.log(`[AsaasWebhook] Received event: ${event}`);
+            console.log(`[AsaasWebhook] Payment ID: ${payment?.id}, Reference: ${payment?.externalReference}`);
+
+            // Validate webhook token (optional but recommended)
+            const receivedToken = req.headers['asaas-access-token'];
+            if (receivedToken) {
+                const isValid = await asaasService.validateWebhookToken(receivedToken);
+                if (!isValid) {
+                    console.warn('[AsaasWebhook] Invalid token received');
+                    return res.status(401).json({ error: 'Unauthorized' });
+                }
+            }
+
+            // Only process payment confirmation events
+            if (event !== 'PAYMENT_RECEIVED' && event !== 'PAYMENT_CONFIRMED') {
+                console.log(`[AsaasWebhook] Ignoring event: ${event}`);
+                return res.status(200).json({ received: true });
+            }
+
+            // Extract order ID from externalReference
+            const orderId = payment?.externalReference;
+
+            if (!orderId) {
+                console.warn('[AsaasWebhook] No externalReference in payment');
+                return res.status(200).json({ received: true, warning: 'No externalReference' });
+            }
+
+            // Find order(s) with this asaasId or the reference order
+            let orders = await Order.findAll({
+                where: { asaasId: payment.id }
+            });
+
+            // If no orders found by asaasId, try by ID
+            if (orders.length === 0) {
+                const order = await Order.findByPk(orderId);
+                if (order) {
+                    orders = [order];
+                }
+            }
+
+            if (orders.length === 0) {
+                console.warn(`[AsaasWebhook] No orders found for reference: ${orderId}`);
+                return res.status(200).json({ received: true, warning: 'Order not found' });
+            }
+
+            console.log(`[AsaasWebhook] Found ${orders.length} order(s) to update`);
+
+            // Update orders to PAID
+            for (const order of orders) {
+                order.status = 'PAID';
+                await order.save();
+                console.log(`[AsaasWebhook] Order #${order.id} marked as PAID`);
+
+                // Update Bling status if we have blingId
+                if (order.blingId) {
+                    const blingStatusPaid = await SettingsController.getValue('bling_id_status_paid', 'Atendido');
+
+                    try {
+                        await blingService.updateOrderStatus(order.blingId, blingStatusPaid);
+                        console.log(`[AsaasWebhook] Bling order ${order.blingId} updated to ${blingStatusPaid}`);
+                    } catch (blingError) {
+                        console.error(`[AsaasWebhook] Failed to update Bling:`, blingError.message);
+                        // Continue - Bling update failure shouldn't break the flow
+                    }
+                }
+            }
+
+            res.status(200).json({
+                received: true,
+                ordersUpdated: orders.length,
+                event: event
+            });
+
+        } catch (error) {
+            console.error('[AsaasWebhook] Error:', error);
+            res.status(500).json({ error: 'Internal error' });
+        }
+    }
 }
 
 module.exports = new WebhookController();

@@ -18,6 +18,19 @@ async function initSettings() {
             description: 'Agrupar pedidos do mesmo cliente ao sincronizar'
         });
 
+        // Asaas Integration Settings
+        await Setting.upsert({
+            key: 'asaas_api_key',
+            value: '',
+            description: 'API Key do Asaas (Produção ou Sandbox)'
+        });
+
+        await Setting.upsert({
+            key: 'bling_id_status_paid',
+            value: 'Atendido',
+            description: 'Status/Situação no Bling quando pedido é pago (ex: Atendido)'
+        });
+
         console.log('Settings initialized.');
         process.exit(0);
     } catch (error) {

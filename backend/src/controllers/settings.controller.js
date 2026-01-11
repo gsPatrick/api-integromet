@@ -45,14 +45,33 @@ class SettingsController {
     static async getValue(key, defaultValue) {
         try {
             const setting = await Setting.findByPk(key);
-            if (!setting) return defaultValue;
+
+            if (!setting) {
+                console.log(`[Settings] Key "${key}" not found, using default: ${defaultValue}`);
+                return defaultValue;
+            }
 
             let val = setting.value;
-            if (!isNaN(val)) return Number(val);
+
+            // Handle empty strings
+            if (val === '' || val === null || val === undefined) {
+                console.log(`[Settings] Key "${key}" has empty value, using default: ${defaultValue}`);
+                return defaultValue;
+            }
+
+            // Try to parse as number if it looks like one
+            if (!isNaN(val) && val !== '') {
+                const numVal = Number(val);
+                console.log(`[Settings] Key "${key}" = ${numVal} (number)`);
+                return numVal;
+            }
             if (val === 'true') return true;
             if (val === 'false') return false;
+
+            console.log(`[Settings] Key "${key}" = ${val} (string)`);
             return val;
         } catch (e) {
+            console.error(`[Settings] Error getting "${key}":`, e.message);
             return defaultValue;
         }
     }

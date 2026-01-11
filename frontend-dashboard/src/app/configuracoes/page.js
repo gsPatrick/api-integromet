@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, XCircle, Link2, Unlink, Loader2, Save, ShoppingBag, Percent } from 'lucide-react';
+import { Settings, CheckCircle, XCircle, Link2, Unlink, Loader2, Save, ShoppingBag, Percent, CreditCard, Key, Eye, EyeOff } from 'lucide-react';
 import api from '../../services/api';
 
 export default function ConfigPage() {
@@ -9,10 +9,13 @@ export default function ConfigPage() {
     const [settings, setSettings] = useState({
         markup_percentage: 35,
         group_orders: false,
-        campaign_description: ''
+        campaign_description: '',
+        asaas_api_key: '',
+        bling_id_status_paid: 'Atendido'
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [showApiKey, setShowApiKey] = useState(false);
 
     useEffect(() => {
         checkStatus();
@@ -41,7 +44,9 @@ export default function ConfigPage() {
                 ...res.data, // Merge with defaults
                 markup_percentage: Number(res.data.markup_percentage ?? 35),
                 group_orders: res.data.group_orders === true || res.data.group_orders === 'true',
-                campaign_description: res.data.campaign_description || ''
+                campaign_description: res.data.campaign_description || '',
+                asaas_api_key: res.data.asaas_api_key || '',
+                bling_id_status_paid: res.data.bling_id_status_paid || 'Atendido'
             }));
         } catch (error) {
             console.error('Failed to fetch settings', error);
@@ -57,7 +62,9 @@ export default function ConfigPage() {
             const payload = {
                 markup_percentage: settings.markup_percentage,
                 group_orders: settings.group_orders,
-                campaign_description: settings.campaign_description
+                campaign_description: settings.campaign_description,
+                asaas_api_key: settings.asaas_api_key,
+                bling_id_status_paid: settings.bling_id_status_paid
             };
 
             await api.put('/settings', payload);
@@ -120,7 +127,100 @@ export default function ConfigPage() {
                     </button>
                 </div>
 
-                {/* SYSTEM PREFERENCES (NEW) */}
+                {/* ASAAS CARD (Payment Integration) */}
+                <div className="card" style={{ padding: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <CreditCard size={24} color="#10b981" />
+                            <h2 style={{ fontSize: '1.25rem' }}>Asaas (Pagamentos)</h2>
+                        </div>
+                        {settings.asaas_api_key ? (
+                            <span className="badge badge-green">
+                                <CheckCircle size={12} /> Configurado
+                            </span>
+                        ) : (
+                            <span className="badge badge-gray">
+                                <XCircle size={12} /> Não Configurado
+                            </span>
+                        )}
+                    </div>
+
+                    <p style={{ color: '#636e72', marginBottom: '24px', lineHeight: 1.6 }}>
+                        Configure a integração com o Asaas para gerar links de pagamento automáticos.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {/* API Key Input */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', color: '#2d3436' }}>
+                                API Key do Asaas
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <Key size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#636e72' }} />
+                                <input
+                                    type={showApiKey ? 'text' : 'password'}
+                                    className="input"
+                                    style={{ paddingLeft: '40px', paddingRight: '40px' }}
+                                    value={settings.asaas_api_key}
+                                    onChange={(e) => setSettings({ ...settings, asaas_api_key: e.target.value })}
+                                    placeholder="$aact_..."
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowApiKey(!showApiKey)}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '8px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#636e72'
+                                    }}
+                                >
+                                    {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: '#b2bec3', marginTop: '6px' }}>
+                                Encontre em: Asaas → Minha Conta → Integrações → API Key
+                            </p>
+                        </div>
+
+                        {/* Bling Status Input */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', color: '#2d3436' }}>
+                                Status "Pago" no Bling
+                            </label>
+                            <input
+                                type="text"
+                                className="input"
+                                value={settings.bling_id_status_paid}
+                                onChange={(e) => setSettings({ ...settings, bling_id_status_paid: e.target.value })}
+                                placeholder="Atendido"
+                            />
+                            <p style={{ fontSize: '0.75rem', color: '#b2bec3', marginTop: '6px' }}>
+                                Nome da situação no Bling quando o pedido é pago (ex: "Atendido", "Em aberto")
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={handleSaveSettings}
+                            className="btn btn-primary"
+                            style={{ width: '100%', marginTop: '8px', background: '#10b981' }}
+                            disabled={saving}
+                        >
+                            {saving ? <Loader2 className="animate-spin" /> : (
+                                <>
+                                    <Save size={18} />
+                                    Salvar Configurações Asaas
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {/* SYSTEM PREFERENCES */}
                 <div className="card" style={{ padding: '24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

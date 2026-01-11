@@ -139,6 +139,116 @@ class OrderController {
             res.status(500).json({ error: 'Sync failed: ' + error.message });
         }
     }
+
+    /**
+     * Generate Payment Link (Asaas) and Sync to Bling
+     * POST /orders/generate-link-sync
+     * Body: { orderIds: [1, 2, 3] }
+     */
+    async generateLinkSync(req, res) {
+        const asaasService = require('../services/asaas.service');
+        const SettingsController = require('./settings.controller');
+
+        try {
+            const { orderIds } = req.body;
+
+            if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+                return res.status(400).json({ error: 'No orderIds provided' });
+            }
+
+            // 1. Fetch orders
+            const orders = await Order.findAll({
+                where: {
+                    id: { [require('sequelize').Op.in]: orderIds }
+                }
+            });
+
+            if (orders.length === 0) {
+                return res.status(404).json({ error: 'No orders found' });
+            }
+
+            // 2. Calculate total value
+            const totalValue = orders.reduce((sum, o) => {
+                const price = parseFloat(o.sellPrice || 0);
+                const qty = o.quantity || 1;
+                return sum + (price * qty);
+            }, 0);
+
+            if (totalValue <= 0) {
+                return res.status(400).json({ error: 'Total value must be greater than 0' });
+            }
+
+            // 3. Get customer info from first order
+            const mainOrder = orders[0];
+            const customerName = mainOrder.customerName || 'Cliente WhatsApp';
+            const customerPhone = mainOrder.customerPhone;
+
+            console.log(`[OrderController] Generating payment link for ${orders.length} orders, total: R$ ${totalValue.toFixed(2)}`);
+
+            // 4. Sync to Bling first (if not already synced)
+            let blingId = null;
+            const unsyncedOrders = orders.filter(o => !o.blingSyncedAt);
+
+            if (unsyncedOrders.length > 0) {
+                try {
+                    const blingResult = await blingService.executeOrder(orders);
+
+                    // Extract Bling order ID if available
+                    if (blingResult && blingResult.data && blingResult.data.id) {
+                        blingId = blingResult.data.id;
+                    }
+
+                    // Mark as synced
+                    for (const o of orders) {
+                        o.blingSyncedAt = new Date();
+                        if (blingId) o.blingId = blingId;
+                        await o.save();
+                    }
+
+                    console.log(`[OrderController] Bling sync completed. Order ID: ${blingId}`);
+                } catch (blingError) {
+                    console.error('[OrderController] Bling sync failed (continuing anyway):', blingError.message);
+                    // Continue even if Bling fails - payment link is priority
+                }
+            }
+
+            // 5. Generate Asaas payment link
+            const campaignDescription = await SettingsController.getValue('campaign_description', '');
+            const description = `Pedido ${campaignDescription || 'WhatsApp'} - ${customerName}`;
+
+            const asaasResult = await asaasService.generatePaymentLink({
+                customerName,
+                customerPhone,
+                orderId: mainOrder.id, // Use first order ID as reference
+                totalValue,
+                description
+            });
+
+            // 6. Update all orders with payment info
+            for (const order of orders) {
+                order.paymentLink = asaasResult.paymentLink;
+                order.asaasId = asaasResult.asaasId;
+                order.status = 'PENDING_PAYMENT';
+                await order.save();
+            }
+
+            console.log(`[OrderController] Payment link generated: ${asaasResult.paymentLink}`);
+
+            res.json({
+                success: true,
+                paymentLink: asaasResult.paymentLink,
+                asaasId: asaasResult.asaasId,
+                blingId: blingId,
+                totalValue: totalValue.toFixed(2),
+                ordersCount: orders.length
+            });
+
+        } catch (error) {
+            console.error('[OrderController] generateLinkSync failed:', error);
+            res.status(500).json({ error: 'Failed to generate payment link: ' + error.message });
+        }
+    }
+
     /**
      * Send Confirmation Message to Customer via WhatsApp
      * POST /orders/send-confirmation

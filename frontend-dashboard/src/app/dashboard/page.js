@@ -5,7 +5,7 @@ import api from '../../services/api';
 import OrderCard from '../../components/orders/OrderCard/OrderCard';
 import EditModal from '../../components/orders/EditModal/EditModal';
 import MessagePreviewModal from '../../components/orders/MessagePreviewModal/MessagePreviewModal';
-import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2, MessageSquare } from 'lucide-react';
+import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2, MessageSquare, Filter, Check, Clock } from 'lucide-react';
 
 export default function Dashboard() {
     const [orders, setOrders] = useState([]);
@@ -15,6 +15,7 @@ export default function Dashboard() {
     const [selectedOrders, setSelectedOrders] = useState({}); // { orderId: true/false }
     const [syncing, setSyncing] = useState(null); // phone of customer currently syncing
     const [previewData, setPreviewData] = useState(null); // { group, selectedIds }
+    const [syncFilter, setSyncFilter] = useState('all'); // 'all', 'pending', 'synced'
 
     useEffect(() => {
         fetchOrders();
@@ -195,6 +196,72 @@ export default function Dashboard() {
                 </button>
             </div>
 
+            {/* Filter Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#71717a', fontSize: '0.875rem' }}>
+                    <Filter size={16} />
+                    <span>Filtrar:</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={() => setSyncFilter('all')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: syncFilter === 'all' ? '2px solid #e67e22' : '1px solid #e5e5e5',
+                            background: syncFilter === 'all' ? '#fff7ed' : 'white',
+                            color: syncFilter === 'all' ? '#e67e22' : '#71717a',
+                            fontWeight: syncFilter === 'all' ? 600 : 400,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.875rem'
+                        }}
+                    >
+                        Todos
+                    </button>
+                    <button
+                        onClick={() => setSyncFilter('pending')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: syncFilter === 'pending' ? '2px solid #f59e0b' : '1px solid #e5e5e5',
+                            background: syncFilter === 'pending' ? '#fffbeb' : 'white',
+                            color: syncFilter === 'pending' ? '#f59e0b' : '#71717a',
+                            fontWeight: syncFilter === 'pending' ? 600 : 400,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.875rem'
+                        }}
+                    >
+                        <Clock size={14} />
+                        Pendentes
+                    </button>
+                    <button
+                        onClick={() => setSyncFilter('synced')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: syncFilter === 'synced' ? '2px solid #10b981' : '1px solid #e5e5e5',
+                            background: syncFilter === 'synced' ? '#ecfdf5' : 'white',
+                            color: syncFilter === 'synced' ? '#10b981' : '#71717a',
+                            fontWeight: syncFilter === 'synced' ? 600 : 400,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.875rem'
+                        }}
+                    >
+                        <Check size={14} />
+                        No Bling
+                    </button>
+                </div>
+            </div>
+
             {/* Orders Groups or Empty State */}
             {orders.length === 0 ? (
                 <div className="card" style={{ padding: '80px 40px', textAlign: 'center' }}>
@@ -210,92 +277,130 @@ export default function Dashboard() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                    {orders.map(group => {
-                        const selectedCount = getSelectedIdsForCustomer(group).length;
-                        const allSelected = areAllSelectedForCustomer(group);
-                        const isSyncing = syncing === group.customerPhone;
+                    {orders
+                        .map(group => {
+                            // Apply filter to orders within each group
+                            const filteredOrders = group.orders.filter(order => {
+                                if (syncFilter === 'pending') return !order.blingSyncedAt;
+                                if (syncFilter === 'synced') return !!order.blingSyncedAt;
+                                return true; // 'all'
+                            });
 
-                        return (
-                            <div key={group.customerPhone} className="card" style={{ overflow: 'hidden' }}>
+                            // Skip groups with no matching orders
+                            if (filteredOrders.length === 0) return null;
 
-                                {/* Customer Header */}
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '20px 24px',
-                                        background: expandedCustomers[group.customerPhone] ? '#fffbf5' : 'white',
-                                        cursor: 'pointer',
-                                        transition: 'background 0.2s'
-                                    }}
-                                    onClick={() => toggleExpand(group.customerPhone)}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        {/* Select All Checkbox */}
-                                        <div
-                                            onClick={(e) => { e.stopPropagation(); toggleSelectAllForCustomer(group); }}
-                                            style={{ cursor: 'pointer', color: allSelected ? '#e67e22' : '#b2bec3' }}
-                                        >
-                                            {allSelected ? <CheckSquare size={22} /> : <Square size={22} />}
-                                        </div>
+                            return { ...group, orders: filteredOrders };
+                        })
+                        .filter(Boolean)
+                        .map(group => {
+                            const selectedCount = getSelectedIdsForCustomer(group).length;
+                            const allSelected = areAllSelectedForCustomer(group);
+                            const isSyncing = syncing === group.customerPhone;
 
-                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fff3e0', color: '#e58e26', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                                            {group.customerName?.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
-                                                {group.customerName || 'Cliente WhatsApp'}
-                                            </h3>
-                                            <p style={{ fontSize: '0.85rem', color: '#636e72', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <Phone size={12} /> {group.customerPhone}
-                                            </p>
-                                        </div>
-                                        <div style={{ marginLeft: '16px', padding: '4px 12px', borderRadius: '12px', background: '#ecf0f1', fontSize: '0.8rem', fontWeight: 600, color: '#2d3436' }}>
-                                            {group.orders.length} ite{group.orders.length > 1 ? 'ns' : 'm'}
-                                        </div>
-                                        {selectedCount > 0 && (
-                                            <div style={{ padding: '4px 12px', borderRadius: '12px', background: '#fff3e0', fontSize: '0.8rem', fontWeight: 600, color: '#e67e22' }}>
-                                                {selectedCount} selecionado{selectedCount > 1 ? 's' : ''}
-                                            </div>
-                                        )}
-                                    </div>
+                            return (
+                                <div key={group.customerPhone} className="card" style={{ overflow: 'hidden' }}>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        {/* Send Confirmation Button */}
-                                        {selectedCount > 0 && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleSendConfirmation(group); }}
-                                                disabled={!!previewData}
-                                                style={{
-                                                    padding: '8px 14px',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    background: '#10b981', // Emerald green
-                                                    color: 'white',
-                                                    fontWeight: 600,
-                                                    fontSize: '0.8rem',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px'
-                                                }}
+                                    {/* Customer Header */}
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '20px 24px',
+                                            background: expandedCustomers[group.customerPhone] ? '#fffbf5' : 'white',
+                                            cursor: 'pointer',
+                                            transition: 'background 0.2s'
+                                        }}
+                                        onClick={() => toggleExpand(group.customerPhone)}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            {/* Select All Checkbox */}
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); toggleSelectAllForCustomer(group); }}
+                                                style={{ cursor: 'pointer', color: allSelected ? '#e67e22' : '#b2bec3' }}
                                             >
-                                                <MessageSquare size={14} />
-                                                Enviar Confirmação
-                                            </button>
-                                        )}
+                                                {allSelected ? <CheckSquare size={22} /> : <Square size={22} />}
+                                            </div>
 
-                                        {/* Sync Selected Button */}
-                                        {selectedCount > 0 && (
+                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fff3e0', color: '#e58e26', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                                                {group.customerName?.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
+                                                    {group.customerName || 'Cliente WhatsApp'}
+                                                </h3>
+                                                <p style={{ fontSize: '0.85rem', color: '#636e72', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <Phone size={12} /> {group.customerPhone}
+                                                </p>
+                                            </div>
+                                            <div style={{ marginLeft: '16px', padding: '4px 12px', borderRadius: '12px', background: '#ecf0f1', fontSize: '0.8rem', fontWeight: 600, color: '#2d3436' }}>
+                                                {group.orders.length} ite{group.orders.length > 1 ? 'ns' : 'm'}
+                                            </div>
+                                            {selectedCount > 0 && (
+                                                <div style={{ padding: '4px 12px', borderRadius: '12px', background: '#fff3e0', fontSize: '0.8rem', fontWeight: 600, color: '#e67e22' }}>
+                                                    {selectedCount} selecionado{selectedCount > 1 ? 's' : ''}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            {/* Send Confirmation Button */}
+                                            {selectedCount > 0 && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleSendConfirmation(group); }}
+                                                    disabled={!!previewData}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        background: '#10b981', // Emerald green
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    <MessageSquare size={14} />
+                                                    Enviar Confirmação
+                                                </button>
+                                            )}
+
+                                            {/* Sync Selected Button */}
+                                            {selectedCount > 0 && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleSyncSelected(group); }}
+                                                    disabled={isSyncing}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        background: '#3498db',
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                                    Sinc. Selecionados
+                                                </button>
+                                            )}
+
+                                            {/* Sync All Grouped Button */}
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleSyncSelected(group); }}
+                                                onClick={(e) => { e.stopPropagation(); handleSyncAllGrouped(group); }}
                                                 disabled={isSyncing}
                                                 style={{
                                                     padding: '8px 14px',
                                                     borderRadius: '8px',
                                                     border: 'none',
-                                                    background: '#3498db',
+                                                    background: '#e67e22',
                                                     color: 'white',
                                                     fontWeight: 600,
                                                     fontSize: '0.8rem',
@@ -306,86 +411,63 @@ export default function Dashboard() {
                                                 }}
                                             >
                                                 {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                                Sinc. Selecionados
+                                                Sinc. Tudo
                                             </button>
-                                        )}
 
-                                        {/* Sync All Grouped Button */}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleSyncAllGrouped(group); }}
-                                            disabled={isSyncing}
-                                            style={{
-                                                padding: '8px 14px',
-                                                borderRadius: '8px',
-                                                border: 'none',
-                                                background: '#e67e22',
-                                                color: 'white',
-                                                fontWeight: 600,
-                                                fontSize: '0.8rem',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px'
-                                            }}
-                                        >
-                                            {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                            Sinc. Tudo
-                                        </button>
-
-                                        <div style={{ textAlign: 'right', minWidth: '100px' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#636e72', display: 'block' }}>Total</span>
-                                            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00b894' }}>
-                                                R$ {group.totalValue.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        {expandedCustomers[group.customerPhone] ? <ChevronUp size={20} color="#b2bec3" /> : <ChevronDown size={20} color="#b2bec3" />}
-                                    </div>
-                                </div>
-
-                                {/* Orders Grid (Collapsible) */}
-                                {expandedCustomers[group.customerPhone] && (
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                                        gap: '16px',
-                                        padding: '20px 24px',
-                                        background: '#fafafa',
-                                        borderTop: '1px solid #f1f2f6'
-                                    }}>
-                                        {group.orders.map(order => (
-                                            <div key={order.id} style={{ position: 'relative' }}>
-                                                {/* Checkbox Overlay - Hide if processed */}
-                                                {!order.blingSyncedAt && (
-                                                    <div
-                                                        onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order); }}
-                                                        style={{
-                                                            position: 'absolute',
-                                                            top: '12px',
-                                                            left: '12px',
-                                                            zIndex: 10,
-                                                            cursor: 'pointer',
-                                                            background: 'white',
-                                                            borderRadius: '4px',
-                                                            padding: '2px',
-                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                                            color: selectedOrders[order.id] ? '#e67e22' : '#b2bec3'
-                                                        }}
-                                                    >
-                                                        {selectedOrders[order.id] ? <CheckSquare size={20} /> : <Square size={20} />}
-                                                    </div>
-                                                )}
-
-                                                <OrderCard
-                                                    order={order}
-                                                    onClick={setSelectedOrder}
-                                                />
+                                            <div style={{ textAlign: 'right', minWidth: '100px' }}>
+                                                <span style={{ fontSize: '0.75rem', color: '#636e72', display: 'block' }}>Total</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00b894' }}>
+                                                    R$ {group.totalValue.toFixed(2)}
+                                                </span>
                                             </div>
-                                        ))}
+                                            {expandedCustomers[group.customerPhone] ? <ChevronUp size={20} color="#b2bec3" /> : <ChevronDown size={20} color="#b2bec3" />}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
+
+                                    {/* Orders Grid (Collapsible) */}
+                                    {expandedCustomers[group.customerPhone] && (
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                                            gap: '16px',
+                                            padding: '20px 24px',
+                                            background: '#fafafa',
+                                            borderTop: '1px solid #f1f2f6'
+                                        }}>
+                                            {group.orders.map(order => (
+                                                <div key={order.id} style={{ position: 'relative' }}>
+                                                    {/* Checkbox Overlay - Hide if processed */}
+                                                    {!order.blingSyncedAt && (
+                                                        <div
+                                                            onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order); }}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: '12px',
+                                                                left: '12px',
+                                                                zIndex: 10,
+                                                                cursor: 'pointer',
+                                                                background: 'white',
+                                                                borderRadius: '4px',
+                                                                padding: '2px',
+                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                                                color: selectedOrders[order.id] ? '#e67e22' : '#b2bec3'
+                                                            }}
+                                                        >
+                                                            {selectedOrders[order.id] ? <CheckSquare size={20} /> : <Square size={20} />}
+                                                        </div>
+                                                    )}
+
+                                                    <OrderCard
+                                                        order={order}
+                                                        onClick={setSelectedOrder}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                 </div>
             )}
 

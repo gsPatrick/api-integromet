@@ -61,6 +61,11 @@ const CatalogProduct = sequelize.define('CatalogProduct', {
         allowNull: true,
         comment: 'Raw text extracted from catalog for this product'
     },
+    pdfPath: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Physical path to PDF file for markup generation'
+    },
     isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true
