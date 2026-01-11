@@ -243,7 +243,7 @@ export default function ConfigPage() {
                                     className="input"
                                     style={{ paddingLeft: '40px' }}
                                     value={settings.markup_percentage}
-                                    onChange={(e) => setSettings({ ...settings, markup_percentage: e.target.value })}
+                                    onChange={(e) => setSettings({ ...settings, markup_percentage: Number(e.target.value) || 0 })}
                                     placeholder="35"
                                 />
                             </div>
