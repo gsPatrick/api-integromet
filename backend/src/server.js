@@ -92,6 +92,7 @@ app.post('/catalog/upload-pdf', pdfUpload.single('pdf'), catalogController.uploa
 app.get('/catalog/search/:code', catalogController.searchByCode);
 app.delete('/catalog/reset', catalogController.resetCatalog);
 app.post('/catalog/generate-markup', catalogController.generateMarkup);
+app.post('/catalog/generate-markup-upload', pdfUpload.single('pdf'), catalogController.generateMarkupFromUpload);
 
 // Protected Routes (Require x-api-token)
 app.use('/orders', authMiddleware);

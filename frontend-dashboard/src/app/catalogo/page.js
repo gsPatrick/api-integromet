@@ -208,93 +208,109 @@ export default function CatalogPage() {
                 </div>
             </div>
 
-            {/* Markup Generation Section */}
-            {catalogStatus.catalogs?.length > 0 && (
-                <div className="card" style={{ padding: '32px', marginBottom: '32px', background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)', borderRadius: '16px', boxShadow: '0 4px 24px rgba(255, 152, 0, 0.15)', border: '1px solid #ffcc80' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)' }}>
-                            <FileText size={24} color="white" />
-                        </div>
-                        <div>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '4px', color: '#e65100' }}>Gerar Catálogo com Markup</h2>
-                            <p style={{ color: '#bf360c', fontSize: '0.95rem' }}>Atualize os preços do catálogo com uma porcentagem de markup</p>
-                        </div>
+            {/* Markup Generation Section - Direct Upload */}
+            <div className="card" style={{ padding: '32px', marginBottom: '32px', background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)', borderRadius: '16px', boxShadow: '0 4px 24px rgba(255, 152, 0, 0.15)', border: '1px solid #ffcc80' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)' }}>
+                        <FileText size={24} color="white" />
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: '16px', alignItems: 'end' }}>
-                        <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>Catálogo</label>
-                            <select
-                                id="markupCatalogSelect"
-                                style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '1rem', fontWeight: 500, cursor: 'pointer', outline: 'none' }}
-                            >
-                                {catalogStatus.catalogs.map((cat, i) => (
-                                    <option key={i} value={cat}>{cat}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>Markup %</label>
-                            <input
-                                type="number"
-                                id="markupPercentage"
-                                defaultValue="20"
-                                min="0"
-                                max="200"
-                                step="1"
-                                style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center', outline: 'none' }}
-                            />
-                        </div>
-
-                        <button
-                            id="generateMarkupBtn"
-                            onClick={async () => {
-                                const btn = document.getElementById('generateMarkupBtn');
-                                const catalog = document.getElementById('markupCatalogSelect').value;
-                                const markup = document.getElementById('markupPercentage').value;
-
-                                btn.disabled = true;
-                                btn.innerHTML = '<span style="display:flex;align-items:center;gap:8px"><svg class="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4m-4.93-5.07l-2.83 2.83m-8.48 8.48l-2.83 2.83m14.14 0l-2.83-2.83M6.34 6.34L3.51 3.51"/></svg>Gerando...</span>';
-
-                                try {
-                                    const response = await api.post('/catalog/generate-markup', {
-                                        catalogName: catalog,
-                                        markupPercentage: parseFloat(markup)
-                                    }, {
-                                        responseType: 'blob',
-                                        timeout: 300000 // 5 minutes
-                                    });
-
-                                    // Create download link
-                                    const url = window.URL.createObjectURL(new Blob([response.data]));
-                                    const link = document.createElement('a');
-                                    link.href = url;
-                                    link.setAttribute('download', `${catalog}_markup_${markup}pct.pdf`);
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    link.remove();
-                                    window.URL.revokeObjectURL(url);
-
-                                    btn.innerHTML = '<span style="display:flex;align-items:center;gap:8px;color:#4caf50"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Concluído!</span>';
-                                    setTimeout(() => {
-                                        btn.innerHTML = 'Gerar PDF';
-                                        btn.disabled = false;
-                                    }, 2000);
-                                } catch (error) {
-                                    const errMsg = error.response?.data?.error || error.message || 'Erro ao gerar PDF';
-                                    alert('Erro: ' + errMsg);
-                                    btn.innerHTML = 'Gerar PDF';
-                                    btn.disabled = false;
-                                }
-                            }}
-                            style={{ padding: '12px 24px', borderRadius: '10px', background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '1rem', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
-                        >
-                            Gerar PDF
-                        </button>
+                    <div>
+                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '4px', color: '#e65100' }}>Gerar Catálogo com Markup</h2>
+                        <p style={{ color: '#bf360c', fontSize: '0.95rem' }}>Faça upload de um PDF e aplique uma porcentagem de markup nos preços</p>
                     </div>
                 </div>
-            )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: '16px', alignItems: 'end' }}>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>
+                            <Upload size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                            Selecionar PDF
+                        </label>
+                        <input
+                            type="file"
+                            id="markupPdfFile"
+                            accept="application/pdf"
+                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '0.95rem', cursor: 'pointer', outline: 'none' }}
+                        />
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>Markup %</label>
+                        <input
+                            type="number"
+                            id="markupPercentage"
+                            defaultValue="20"
+                            min="0"
+                            max="200"
+                            step="1"
+                            style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center', outline: 'none' }}
+                        />
+                    </div>
+
+                    <button
+                        id="generateMarkupBtn"
+                        onClick={async () => {
+                            const btn = document.getElementById('generateMarkupBtn');
+                            const fileInput = document.getElementById('markupPdfFile');
+                            const markup = document.getElementById('markupPercentage').value;
+
+                            if (!fileInput.files || !fileInput.files[0]) {
+                                alert('Por favor, selecione um arquivo PDF');
+                                return;
+                            }
+
+                            const file = fileInput.files[0];
+                            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                                alert('Apenas arquivos PDF são permitidos');
+                                return;
+                            }
+
+                            btn.disabled = true;
+                            btn.innerHTML = '<span style="display:flex;align-items:center;gap:8px"><svg class="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-8-10h4m12 0h4m-4.93-5.07l-2.83 2.83m-8.48 8.48l-2.83 2.83m14.14 0l-2.83-2.83M6.34 6.34L3.51 3.51"/></svg>Gerando...</span>';
+
+                            try {
+                                const formData = new FormData();
+                                formData.append('pdf', file);
+                                formData.append('markupPercentage', parseFloat(markup));
+
+                                const response = await api.post('/catalog/generate-markup-upload', formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' },
+                                    responseType: 'blob',
+                                    timeout: 300000 // 5 minutes
+                                });
+
+                                // Create download link
+                                const url = window.URL.createObjectURL(new Blob([response.data]));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                const baseName = file.name.replace('.pdf', '').replace('.PDF', '');
+                                link.setAttribute('download', `${baseName}_markup_${markup}pct.pdf`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                window.URL.revokeObjectURL(url);
+
+                                // Reset file input
+                                fileInput.value = '';
+
+                                btn.innerHTML = '<span style="display:flex;align-items:center;gap:8px;color:#4caf50"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Concluído!</span>';
+                                setTimeout(() => {
+                                    btn.innerHTML = 'Gerar PDF';
+                                    btn.disabled = false;
+                                }, 2000);
+                            } catch (error) {
+                                const errMsg = error.response?.data?.error || error.message || 'Erro ao gerar PDF';
+                                alert('Erro: ' + errMsg);
+                                btn.innerHTML = 'Gerar PDF';
+                                btn.disabled = false;
+                            }
+                        }}
+                        style={{ padding: '12px 24px', borderRadius: '10px', background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '1rem', boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
+                    >
+                        Gerar PDF
+                    </button>
+                </div>
+            </div>
 
             {/* Catalog List / Metadata */}
             <div className="card" style={{ background: 'white', borderRadius: '16px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}>

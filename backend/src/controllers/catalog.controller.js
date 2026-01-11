@@ -362,6 +362,52 @@ class CatalogController {
             res.status(500).json({ error: 'Falha ao gerar PDF com markup: ' + error.message });
         }
     }
+
+    /**
+     * Generate PDF with markup from direct upload (no catalog storage)
+     * POST /catalog/generate-markup-upload
+     */
+    async generateMarkupFromUpload(req, res) {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
+            }
+
+            const markupPercentage = parseFloat(req.body.markupPercentage);
+
+            if (isNaN(markupPercentage) || markupPercentage < 0) {
+                return res.status(400).json({ error: 'Porcentagem de markup inválida' });
+            }
+
+            const pdfPath = req.file.path;
+            const originalName = req.file.originalname || 'catalog.pdf';
+
+            console.log(`[CatalogController] Generating markup PDF from upload: ${originalName} with ${markupPercentage}%`);
+
+            // Generate the markup PDF
+            const result = await catalogMarkupService.generateMarkupPdf(
+                pdfPath,
+                markupPercentage
+            );
+
+            // Return the file for download
+            res.download(result.outputPath, result.outputFilename, (err) => {
+                if (err) {
+                    console.error('[CatalogController] Error sending file:', err);
+                }
+                // Clean up the uploaded file after processing
+                try {
+                    fs.unlinkSync(pdfPath);
+                } catch (e) {
+                    console.warn('[CatalogController] Could not delete uploaded file:', e.message);
+                }
+            });
+
+        } catch (error) {
+            console.error('[CatalogController] Error generating markup PDF from upload:', error);
+            res.status(500).json({ error: 'Falha ao gerar PDF com markup: ' + error.message });
+        }
+    }
 }
 
 module.exports = new CatalogController();
