@@ -89,53 +89,92 @@ class CatalogMarkupService {
                 lines[y].push(item.str);
             });
 
-            // Process each line (sorted by Y descending for logic flow, but lines object keys are Y strings)
-            // Need to sort keys to process sequentially top-down or bottom-up?
-            // PDF Y usually grows upwards (0 at bottom). So top items have HIGHER Y.
-            // We should process from High Y to Low Y to read line by line natural order.
+            // Process each line (sorted by Y descending for logic flow)
+            const sortedYs = Object.keys(lines).map(Number).sort((a, b) => b - a);
 
-            const sortedYs = Object.keys(lines).map(Number).sort((a, b) => b - a); // Descending Y (Top to Bottom)
+            // State approach: We iterate top-down.
+            // We need to look ahead or keep buffer.
+            // Let's iterate index-based on sortedYs to peek next/prev.
 
-            let lastCode = null;
-
-            sortedYs.forEach(y => {
+            for (let i = 0; i < sortedYs.length; i++) {
+                const y = sortedYs[i];
                 const lineParts = lines[y];
                 const fullLine = lineParts.join(' ');
 
-                // Matches
                 const codeMatch = fullLine.match(/\b\d{4,8}\b/);
-                // Regex for price: (R$ )? XX,XX
-                const priceMatch = fullLine.match(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/);
 
-                if (codeMatch && priceMatch) {
-                    // Perfect match on same line
+                // Find ALL prices in the line
+                // matchAll returns iterator. regex global flag required.
+                const priceMatches = [...fullLine.matchAll(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/g)];
+
+                if (codeMatch) {
                     const code = codeMatch[0];
-                    const priceStr = priceMatch[1] || priceMatch[0];
-                    const price = this.parseBrazilianPrice(priceStr);
-                    if (price > 0) priceMap.set(code, price);
-                    lastCode = null; // Reset
-                } else if (codeMatch) {
-                    // Code found, but no price. Wait for next line.
-                    lastCode = codeMatch[0];
-                } else if (priceMatch && lastCode) {
-                    // Price found, and we have a pending code from previous (upper) line
-                    const priceStr = priceMatch[1] || priceMatch[0];
-                    const price = this.parseBrazilianPrice(priceStr);
-                    if (price > 0) priceMap.set(lastCode, price);
-                    // Don't reset lastCode yet if we support multiple prices? 
-                    // Usually we just want the first price found for the base code.
-                    lastCode = null;
-                } else {
-                    // Reset if line has neither (e.g. Header text or garbage), 
-                    // unless it's strictly the next line? 
-                    // Let's be lenient: keep lastCode for 1-2 lines? 
-                    // For now, reset if we see a new code or strict break.
-                    // But in Tables, usually empty lines are rare or ignored.
+                    let extractedPrices = [];
+
+                    // CASE 1: Prices on SAME line as Code
+                    if (priceMatches.length > 0) {
+                        extractedPrices = priceMatches.map(m => ({
+                            price: this.parseBrazilianPrice(m[1] || m[0]),
+                            label: '' // No explicit size label on same line usually, unless parsed
+                        }));
+                    }
+                    // CASE 2: Prices on NEXT line(s)
+                    // Look ahead 1-2 lines
+                    else {
+                        // Check next line (i+1)
+                        if (i + 1 < sortedYs.length) {
+                            const nextLine = lines[sortedYs[i + 1]].join(' ');
+                            const nextPrices = [...nextLine.matchAll(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/g)];
+
+                            if (nextPrices.length > 0) {
+                                // Check if there is a SIZE line in between or same line?
+                                // Sometimes sizes are on the line WITH the code, or the line WITH the prices, or line BETWEEN.
+                                // Let's look for Size Labels in CURRENT line (with Code) or NEXT line (with Prices) or Previous?
+
+                                // Simple Heuristic: If we found prices in Next Line, look for Sizes in Next Line (before prices) or Current Line.
+
+                                // Extract "1 a 3", "4 a 8", "P", "M", "G"
+                                // Regex: \b(\d{1,2}\s?a\s?\d{1,2}|P|M|G|GG|XG)\b
+                                const sizeRegex = /\b(\d{1,2}\s?a\s?\d{1,2}|P|M|G|GG|1\s?a\s?3|4\s?a\s?8|10\s?a\s?14)\b/g;
+
+                                // Try to find sizes in the line that had prices? Or the line before it?
+                                // User example:
+                                // Line 1: Code + Sizes?
+                                // Line 2: Prices
+                                // OR
+                                // Line 1: Code
+                                // Line 2: Sizes
+                                // Line 3: Prices
+
+                                // Let's try to capture sizes appearing in the vicinity.
+                                // For now, map by index: 1st size -> 1st price.
+
+                                const sizesInCodeLine = [...fullLine.matchAll(sizeRegex)].map(m => m[0]);
+                                const sizesInPriceLine = [...nextLine.matchAll(sizeRegex)].map(m => m[0]);
+                                // Also check line BETWEEN if any? (Not doing that yet)
+
+                                const sizes = [...sizesInCodeLine, ...sizesInPriceLine];
+
+                                extractedPrices = nextPrices.map((m, idx) => ({
+                                    price: this.parseBrazilianPrice(m[1] || m[0]),
+                                    label: sizes[idx] || '' // Fallback to empty if no size match
+                                }));
+                            }
+                        }
+                    }
+
+                    if (extractedPrices.length > 0) {
+                        // Filter invalid
+                        const validPrices = extractedPrices.filter(p => p.price > 0);
+                        if (validPrices.length > 0) {
+                            priceMap.set(code, validPrices);
+                        }
+                    }
                 }
-            });
+            }
         }
 
-        console.log(`[CatalogMarkup] Extracted ${priceMap.size} prices from Price List`);
+        console.log(`[CatalogMarkup] Extracted prices for ${priceMap.size} codes`);
         return priceMap;
     }
 
@@ -144,19 +183,15 @@ class CatalogMarkupService {
             return this.generateMergedPdf(pdfPath, pricePdfPath, markupPercentage);
         }
 
-        // --- EXISTING LOGIC FOR SINGLE PDF (REPLACE PRICES) ---
-        console.log(`[CatalogMarkup] Processing PDF (Replace Logic): ${pdfPath}`);
+        return this.generateSinglePdfReplace(pdfPath, markupPercentage);
+    }
+
+    // Helper for old logic to keep file clean
+    async generateSinglePdfReplace(pdfPath, markupPercentage) {
+        console.log(`[CatalogMarkup] Processing Single PDF: ${pdfPath}`);
         const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
         const pdfBuffer = fs.readFileSync(pdfPath);
-
-        // Regex for prices
         const prices = await this.extractItemsFromPdf(pdfBuffer, /R\$\s?[\d.,]+/g);
-        console.log(`[CatalogMarkup] Found ${prices.length} prices to replace`);
-
-        if (prices.length === 0) {
-            // Fallback warning handled by caller or just return empty
-            console.warn('[CatalogMarkup] No prices found to replace');
-        }
 
         const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
         const pages = pdfDoc.getPages();
@@ -166,88 +201,93 @@ class CatalogMarkupService {
         for (const priceInfo of prices) {
             const page = pages[priceInfo.pageIndex];
             if (!page) continue;
-
             const originalValue = this.parseBrazilianPrice(priceInfo.text);
             if (isNaN(originalValue)) continue;
-
             const newValue = originalValue * (1 + markupPercentage / 100);
             const newPriceText = this.formatBrazilianPrice(newValue);
             const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
 
-            // Cover old price
             page.drawRectangle({
-                x: priceInfo.x - 2,
-                y: priceInfo.y - 2,
-                width: priceInfo.width + 4,
-                height: priceInfo.height + 4,
+                x: priceInfo.x - 2, y: priceInfo.y - 2,
+                width: priceInfo.width + 4, height: priceInfo.height + 4,
                 color: rgb(1, 1, 1),
             });
-
-            // Draw new price
             page.drawText(newPriceText, {
-                x: priceInfo.x,
-                y: priceInfo.y,
-                size: fontSize,
-                font: font,
-                color: rgb(0.8, 0, 0),
+                x: priceInfo.x, y: priceInfo.y, size: fontSize, font: font, color: rgb(0.8, 0, 0),
             });
             successCount++;
         }
-
         return this.savePdf(pdfDoc, pdfPath, markupPercentage, successCount);
     }
 
     async generateMergedPdf(visualPdfPath, pricePdfPath, markupPercentage) {
-        console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price: ${pricePdfPath}`);
+        console.log(`[CatalogMarkup] Generate Merged PDF (Multi-Price). Visual: ${visualPdfPath}`);
 
-        // 1. Build Price Map with enhanced multi-line parser
+        // 1. Build Price Map (Map<Code, Array<{price, label}>>)
         const priceMap = await this.extractPriceMapFromPdf(fs.readFileSync(pricePdfPath));
 
-        // 2. Extract Codes from Visual PDF
+        // 2. Extract Codes
         const pdfBuffer = fs.readFileSync(visualPdfPath);
         const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,8}\b/g);
-        console.log(`[CatalogMarkup] Found ${codes.length} codes in Visual PDF`);
+        console.log(`[CatalogMarkup] Found ${codes.length} codes. Matching...`);
 
         // 3. Edit PDF
         const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
         const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
         const pages = pdfDoc.getPages();
-        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold); // For price
+        const labelFont = await pdfDoc.embedFont(StandardFonts.Helvetica); // For label
 
         let successCount = 0;
 
         for (const item of codes) {
             const code = item.text;
-            const originalPrice = priceMap.get(code);
+            const priceList = priceMap.get(code); // Array
 
-            if (originalPrice) {
+            if (priceList && priceList.length > 0) {
                 const page = pages[item.pageIndex];
                 if (!page) continue;
 
-                const newValue = originalPrice * (1 + markupPercentage / 100);
-                const newPriceText = this.formatBrazilianPrice(newValue);
-
-                // POSITION ADJUSTMENT:
-                // Move text to the RIGHT of the code to avoid overlap with description below
-                // Assuming code width ~40-60px
                 const fontSize = 10;
-                const xOffset = item.width + 12; // 12px padding to right
+                const labelFontSize = 9;
+                const lineHeight = 12;
+                const xOffset = item.width + 12; // Right of code
 
-                // Keep Y same as code (aligned baseline) or slightly adjusted
-                // Usually pdf-lib baseline matches.
+                // Draw list of prices
+                priceList.forEach((p, idx) => {
+                    const newValue = p.price * (1 + markupPercentage / 100);
+                    const newPriceText = this.formatBrazilianPrice(newValue);
+                    const labelText = p.label ? `${p.label} ` : '';
+                    const fullText = p.label ? `${labelText}  ${newPriceText}` : newPriceText;
 
-                page.drawText(newPriceText, {
-                    x: item.x + xOffset,
-                    y: item.y, // Same line
-                    size: fontSize,
-                    font: font,
-                    color: rgb(0.8, 0, 0), // Red
+                    // Draw Label (Black)
+                    if (p.label) {
+                        page.drawText(labelText, {
+                            x: item.x + xOffset,
+                            y: item.y - (idx * lineHeight),
+                            size: labelFontSize,
+                            font: labelFont,
+                            color: rgb(0, 0, 0), // Black label
+                        });
+                    }
+
+                    // Draw Price (Red) - Position after label
+                    const labelWidth = p.label ? labelFont.widthOfTextAtSize(labelText, labelFontSize) : 0;
+
+                    page.drawText(newPriceText, {
+                        x: item.x + xOffset + labelWidth,
+                        y: item.y - (idx * lineHeight),
+                        size: fontSize,
+                        font: font,
+                        color: rgb(0.8, 0, 0), // Red price
+                    });
                 });
+
                 successCount++;
             }
         }
 
-        console.log(`[CatalogMarkup] Injected ${successCount} prices into Visual PDF`);
+        console.log(`[CatalogMarkup] Injected prices for ${successCount} products`);
         return this.savePdf(pdfDoc, visualPdfPath, markupPercentage, successCount);
     }
 
