@@ -186,7 +186,39 @@ class CatalogMarkupService {
         return this.generateSinglePdfReplace(pdfPath, markupPercentage);
     }
 
-    // ... (generateSinglePdfReplace remains same)
+    // Helper for old logic (single PDF mode)
+    async generateSinglePdfReplace(pdfPath, markupPercentage) {
+        console.log(`[CatalogMarkup] Processing Single PDF: ${pdfPath}`);
+        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+        const pdfBuffer = fs.readFileSync(pdfPath);
+        const prices = await this.extractItemsFromPdf(pdfBuffer, /R\$\s?[\d.,]+/g);
+
+        const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
+        const pages = pdfDoc.getPages();
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        let successCount = 0;
+
+        for (const priceInfo of prices) {
+            const page = pages[priceInfo.pageIndex];
+            if (!page) continue;
+            const originalValue = this.parseBrazilianPrice(priceInfo.text);
+            if (isNaN(originalValue)) continue;
+            const newValue = originalValue * (1 + markupPercentage / 100);
+            const newPriceText = this.formatBrazilianPrice(newValue);
+            const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
+
+            page.drawRectangle({
+                x: priceInfo.x - 2, y: priceInfo.y - 2,
+                width: priceInfo.width + 4, height: priceInfo.height + 4,
+                color: rgb(1, 1, 1),
+            });
+            page.drawText(newPriceText, {
+                x: priceInfo.x, y: priceInfo.y, size: fontSize, font: font, color: rgb(0.8, 0, 0),
+            });
+            successCount++;
+        }
+        return this.savePdf(pdfDoc, pdfPath, markupPercentage, successCount);
+    }
 
     async generateMergedPdf(visualPdfPath, pricePdfPaths, markupPercentage) {
         console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price Files: ${pricePdfPaths.length}`);
