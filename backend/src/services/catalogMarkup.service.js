@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const pdfParserAIService = require('./pdfParserAI.service');
 
 class CatalogMarkupService {
 
@@ -217,10 +218,10 @@ class CatalogMarkupService {
     }
 
     async generateMergedPdf(visualPdfPath, pricePdfPath, markupPercentage) {
-        console.log(`[CatalogMarkup] Generate Merged PDF (Multi-Price). Visual: ${visualPdfPath}`);
+        console.log(`[CatalogMarkup] Generate Merged PDF (Multi-Price AI). Visual: ${visualPdfPath}`);
 
-        // 1. Build Price Map (Map<Code, Array<{price, label}>>)
-        const priceMap = await this.extractPriceMapFromPdf(fs.readFileSync(pricePdfPath));
+        // 1. Build Price Map using OpenAI
+        const priceMap = await pdfParserAIService.parsePricePdf(fs.readFileSync(pricePdfPath));
 
         // 2. Extract Codes
         const pdfBuffer = fs.readFileSync(visualPdfPath);

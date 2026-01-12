@@ -1,5 +1,6 @@
-const service = require('./src/services/catalogMarkup.service');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+const service = require('./src/services/catalogMarkup.service');
 
 // Output directory correction for standalone run (service assumes ../../public relative to src/services)
 // Since we run from backend root, relative path from service inside src/services works fine if service uses __dirname.
