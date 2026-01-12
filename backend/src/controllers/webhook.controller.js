@@ -32,9 +32,11 @@ class WebhookController {
             console.log(`[NOVA MENSAGEM] Chat: "${chatName}" | ID: "${currentChatId}"`);
 
             // 2. SECURITY WHITELIST
-            const allowedGroupId = process.env.ALLOWED_GROUP_ID;
-            if (allowedGroupId) {
-                if (currentChatId !== allowedGroupId) {
+            // 2. SECURITY WHITELIST
+            const allowedGroupIds = process.env.ALLOWED_GROUP_ID ? process.env.ALLOWED_GROUP_ID.split(',') : [];
+
+            if (allowedGroupIds.length > 0) {
+                if (!allowedGroupIds.includes(currentChatId)) {
                     console.log(`[IGNORADO] Mensagem de chat não autorizado: ${currentChatId}`);
                     return res.status(200).send('IGNORED_UNAUTHORIZED');
                 }
