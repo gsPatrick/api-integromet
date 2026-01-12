@@ -220,18 +220,33 @@ export default function CatalogPage() {
                     </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: '16px', alignItems: 'end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px auto', gap: '16px', alignItems: 'end' }}>
                     <div>
                         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>
                             <Upload size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                            Selecionar PDF
+                            Catálogo (Fotos)
                         </label>
                         <input
                             type="file"
                             id="markupPdfFile"
                             accept="application/pdf"
-                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '0.95rem', cursor: 'pointer', outline: 'none' }}
+                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '0.9rem', cursor: 'pointer', outline: 'none' }}
                         />
+                        <p style={{ fontSize: '0.75rem', color: '#e65100', marginTop: '4px' }}>Arquivo com imagens e códigos</p>
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, color: '#5d4037' }}>
+                            <Database size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                            Tabela de Preços
+                        </label>
+                        <input
+                            type="file"
+                            id="pricePdfFile"
+                            accept="application/pdf"
+                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '0.9rem', cursor: 'pointer', outline: 'none' }}
+                        />
+                        <p style={{ fontSize: '0.75rem', color: '#e65100', marginTop: '4px' }}>Opcional se o catálogo já tiver preços</p>
                     </div>
 
                     <div>
@@ -243,7 +258,7 @@ export default function CatalogPage() {
                             min="0"
                             max="200"
                             step="1"
-                            style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center', outline: 'none' }}
+                            style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '1rem', fontWeight: 600, textAlign: 'center', outline: 'none' }}
                         />
                     </div>
 
@@ -271,6 +286,12 @@ export default function CatalogPage() {
                             try {
                                 const formData = new FormData();
                                 formData.append('pdf', file);
+
+                                const priceInput = document.getElementById('pricePdfFile');
+                                if (priceInput && priceInput.files && priceInput.files[0]) {
+                                    formData.append('pricePdf', priceInput.files[0]);
+                                }
+
                                 formData.append('markupPercentage', parseFloat(markup));
 
                                 const response = await api.post('/catalog/generate-markup-upload', formData, {

@@ -369,25 +369,32 @@ class CatalogController {
      */
     async generateMarkupFromUpload(req, res) {
         try {
-            if (!req.file) {
+            // Multer fields: { pdf: [file], pricePdf: [file] }
+            const files = req.files || {};
+            const visualPdf = files['pdf'] ? files['pdf'][0] : req.file;
+
+            if (!visualPdf) {
                 return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
             }
 
+            const pricePdf = files['pricePdf'] ? files['pricePdf'][0] : null;
             const markupPercentage = parseFloat(req.body.markupPercentage);
 
             if (isNaN(markupPercentage) || markupPercentage < 0) {
                 return res.status(400).json({ error: 'Porcentagem de markup inválida' });
             }
 
-            const pdfPath = req.file.path;
-            const originalName = req.file.originalname || 'catalog.pdf';
+            const pdfPath = visualPdf.path;
+            const pricePdfPath = pricePdf ? pricePdf.path : null;
+            const originalName = visualPdf.originalname || 'catalog.pdf';
 
-            console.log(`[CatalogController] Generating markup PDF from upload: ${originalName} with ${markupPercentage}%`);
+            console.log(`[CatalogController] Generating markup PDF: ${originalName} + ${pricePdf ? 'Price List' : 'No Price List'} with ${markupPercentage}%`);
 
             // Generate the markup PDF
             const result = await catalogMarkupService.generateMarkupPdf(
                 pdfPath,
-                markupPercentage
+                markupPercentage,
+                pricePdfPath
             );
 
             // Return the file for download
@@ -395,11 +402,12 @@ class CatalogController {
                 if (err) {
                     console.error('[CatalogController] Error sending file:', err);
                 }
-                // Clean up the uploaded file after processing
+                // Clean up the uploaded files after processing
                 try {
-                    fs.unlinkSync(pdfPath);
+                    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+                    if (pricePdfPath && fs.existsSync(pricePdfPath)) fs.unlinkSync(pricePdfPath);
                 } catch (e) {
-                    console.warn('[CatalogController] Could not delete uploaded file:', e.message);
+                    console.warn('[CatalogController] Could not delete uploaded files:', e.message);
                 }
             });
 

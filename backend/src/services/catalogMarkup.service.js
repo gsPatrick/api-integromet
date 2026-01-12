@@ -10,6 +10,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const fs = require('fs');
+const path = require('path');
+
 class CatalogMarkupService {
 
     constructor() {
@@ -19,10 +22,6 @@ class CatalogMarkupService {
         }
     }
 
-    /**
-     * Parse a Brazilian price string to a number
-     * Examples: "R$ 49,90" -> 49.90, "R$1.299,00" -> 1299.00
-     */
     parseBrazilianPrice(priceStr) {
         let cleaned = priceStr.replace(/R\$\s?/g, '').trim();
         cleaned = cleaned.replace(/\./g, '');
@@ -30,189 +29,218 @@ class CatalogMarkupService {
         return parseFloat(cleaned);
     }
 
-    /**
-     * Format a number back to Brazilian price format
-     * Example: 64.87 -> "R$ 64,87"
-     */
     formatBrazilianPrice(value) {
         return 'R$ ' + value.toFixed(2).replace('.', ',');
     }
 
-    /**
-     * Extract prices and their PRECISE positions from PDF using pdfjs-dist
-     * @param {Buffer} pdfBuffer - The PDF file as a buffer
-     * @param {number} maxPages - Maximum number of pages to process
-     * @returns {Promise<Array>} - Array of price objects with positions
-     */
-    async extractPricesFromPdf(pdfBuffer, maxPages = 100) {
-        // Dynamic import for ESM module
+    async extractItemsFromPdf(pdfBuffer, regex) {
         const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-
-        const prices = [];
-
-        // Convert Buffer to Uint8Array (required by pdfjs-dist)
+        const items = [];
         const uint8Array = new Uint8Array(pdfBuffer);
         const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
         const pdfDoc = await loadingTask.promise;
 
-        const totalPages = Math.min(pdfDoc.numPages, maxPages);
-        console.log(`[CatalogMarkup] Processing ${totalPages} of ${pdfDoc.numPages} pages...`);
-
-        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        // Process all pages
+        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
             const page = await pdfDoc.getPage(pageNum);
             const viewport = page.getViewport({ scale: 1.0 });
             const textContent = await page.getTextContent();
 
             for (const item of textContent.items) {
                 const text = item.str;
-
-                // Find price matches with their index in the string
-                const regex = /R\$\s?[\d.,]+/g;
                 let match;
+                // Clone regex because of global state
+                const localRegex = new RegExp(regex);
+                while ((match = localRegex.exec(text)) !== null) {
+                    const matchedText = match[0];
+                    const itemX = item.transform[4];
+                    const itemY = item.transform[5];
+                    const itemWidth = item.width || 0;
+                    const charWidth = text.length > 0 ? itemWidth / text.length : 6;
 
-                while ((match = regex.exec(text)) !== null) {
-                    const priceText = match[0];
-                    const matchIndex = match.index;
-                    const value = this.parseBrazilianPrice(priceText);
-
-                    if (!isNaN(value) && value > 0) {
-                        // Calculate the position of the price within the text item
-                        const itemX = item.transform[4];
-                        const itemY = item.transform[5];
-                        const itemWidth = item.width || 0;
-                        const itemHeight = item.height || 10;
-
-                        // Estimate character width (total width / text length)
-                        const charWidth = text.length > 0 ? itemWidth / text.length : 6;
-
-                        // Calculate X offset for where the price starts
-                        const priceXOffset = matchIndex * charWidth;
-                        const priceWidth = priceText.length * charWidth;
-
-                        prices.push({
-                            originalText: priceText,
-                            fullText: text,
-                            value: value,
-                            x: itemX + priceXOffset, // Adjusted X position
-                            y: itemY,
-                            width: priceWidth,       // Width of just the price
-                            height: itemHeight,
-                            charWidth: charWidth,
-                            pageIndex: pageNum - 1,
-                            pageHeight: viewport.height
-                        });
-                    }
+                    items.push({
+                        text: matchedText,
+                        fullText: text,
+                        x: itemX + (match.index * charWidth),
+                        y: itemY,
+                        width: matchedText.length * charWidth,
+                        height: item.height || 10,
+                        pageIndex: pageNum - 1
+                    });
                 }
             }
-
-            if (pageNum % 20 === 0) {
-                console.log(`[CatalogMarkup] Processed page ${pageNum}/${totalPages}`);
-            }
         }
-
-        return prices;
+        return items;
     }
 
-    /**
-     * Generate a new PDF with markup applied to all prices
-     * 
-     * @param {string} pdfPath - Path to the original PDF file
-     * @param {number} markupPercentage - Markup percentage (e.g., 20 for 20%)
-     * @returns {Promise<{outputPath: string, pricesUpdated: number}>}
-     */
-    async generateMarkupPdf(pdfPath, markupPercentage) {
-        console.log(`[CatalogMarkup] Processing PDF: ${pdfPath} with ${markupPercentage}% markup`);
+    async extractPriceMapFromPdf(pdfBuffer) {
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        const priceMap = new Map(); // Code -> Price
+        const uint8Array = new Uint8Array(pdfBuffer);
+        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const pdfDoc = await loadingTask.promise;
 
-        // Dynamic import for ESM module
-        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+            const page = await pdfDoc.getPage(pageNum);
+            const textContent = await page.getTextContent();
 
-        // Read the original PDF
-        const pdfBuffer = fs.readFileSync(pdfPath);
-        console.log(`[CatalogMarkup] Loaded PDF (${(pdfBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
+            // Group by Y coordinate (lines)
+            const lines = {};
+            textContent.items.forEach(item => {
+                const y = Math.round(item.transform[5]); // Round Y to group roughly aligned items
+                if (!lines[y]) lines[y] = [];
+                lines[y].push(item.str);
+            });
 
-        // Extract prices with precise positions
-        const prices = await this.extractPricesFromPdf(pdfBuffer);
-        console.log(`[CatalogMarkup] Found ${prices.length} prices to update`);
+            // Process each line
+            Object.values(lines).forEach(lineParts => {
+                const fullLine = lineParts.join(' ');
 
-        if (prices.length === 0) {
-            throw new Error('Nenhum preço encontrado no PDF. Verifique se o formato é R$ XX,XX');
+                // Look for pairs of Code and Price
+                // Regex for 4-6 digit code: \b\d{4,6}\b
+                // Regex for price: R\$\s?[\d.,]+
+
+                const codeMatch = fullLine.match(/\b\d{4,6}\b/);
+                const priceMatch = fullLine.match(/R\$\s?[\d.,]+/);
+
+                if (codeMatch && priceMatch) {
+                    const code = codeMatch[0];
+                    const price = this.parseBrazilianPrice(priceMatch[0]);
+
+                    if (price > 0) {
+                        priceMap.set(code, price);
+                    }
+                }
+            });
         }
 
-        // Load PDF for editing
+        console.log(`[CatalogMarkup] Extracted ${priceMap.size} prices from Price List`);
+        return priceMap;
+    }
+
+    async generateMarkupPdf(pdfPath, markupPercentage, pricePdfPath = null) {
+        if (pricePdfPath) {
+            return this.generateMergedPdf(pdfPath, pricePdfPath, markupPercentage);
+        }
+
+        // --- EXISTING LOGIC FOR SINGLE PDF (REPLACE PRICES) ---
+        console.log(`[CatalogMarkup] Processing PDF (Replace Logic): ${pdfPath}`);
+        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+        const pdfBuffer = fs.readFileSync(pdfPath);
+
+        // Regex for prices
+        const prices = await this.extractItemsFromPdf(pdfBuffer, /R\$\s?[\d.,]+/g);
+        console.log(`[CatalogMarkup] Found ${prices.length} prices to replace`);
+
+        if (prices.length === 0) {
+            // Fallback warning handled by caller or just return empty
+            console.warn('[CatalogMarkup] No prices found to replace');
+        }
+
+        const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
+        const pages = pdfDoc.getPages();
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        let successCount = 0;
+
+        for (const priceInfo of prices) {
+            const page = pages[priceInfo.pageIndex];
+            if (!page) continue;
+
+            const originalValue = this.parseBrazilianPrice(priceInfo.text);
+            if (isNaN(originalValue)) continue;
+
+            const newValue = originalValue * (1 + markupPercentage / 100);
+            const newPriceText = this.formatBrazilianPrice(newValue);
+            const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
+
+            // Cover old price
+            page.drawRectangle({
+                x: priceInfo.x - 2,
+                y: priceInfo.y - 2,
+                width: priceInfo.width + 4,
+                height: priceInfo.height + 4,
+                color: rgb(1, 1, 1),
+            });
+
+            // Draw new price
+            page.drawText(newPriceText, {
+                x: priceInfo.x,
+                y: priceInfo.y,
+                size: fontSize,
+                font: font,
+                color: rgb(0.8, 0, 0),
+            });
+            successCount++;
+        }
+
+        return this.savePdf(pdfDoc, pdfPath, markupPercentage, successCount);
+    }
+
+    async generateMergedPdf(visualPdfPath, pricePdfPath, markupPercentage) {
+        console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price: ${pricePdfPath}`);
+
+        // 1. Build Price Map
+        const priceMap = await this.extractPriceMapFromPdf(fs.readFileSync(pricePdfPath));
+
+        // 2. Extract Codes from Visual PDF
+        const pdfBuffer = fs.readFileSync(visualPdfPath);
+        // Regex for codes: 4 to 6 digits standalone
+        const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,6}\b/g);
+        console.log(`[CatalogMarkup] Found ${codes.length} codes in Visual PDF`);
+
+        // 3. Edit PDF
+        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
         const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
         let successCount = 0;
 
-        // Process each price
-        for (const priceInfo of prices) {
-            const page = pages[priceInfo.pageIndex];
-            if (!page) continue;
+        for (const item of codes) {
+            const code = item.text;
+            const originalPrice = priceMap.get(code);
 
-            // Calculate new price
-            const newValue = priceInfo.value * (1 + markupPercentage / 100);
-            const newPriceText = this.formatBrazilianPrice(newValue);
+            if (originalPrice) {
+                const page = pages[item.pageIndex];
+                if (!page) continue;
 
-            // Calculate proper font size based on item height
-            const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
+                const newValue = originalPrice * (1 + markupPercentage / 100);
+                const newPriceText = this.formatBrazilianPrice(newValue);
 
-            // Calculate the width needed for the new price text
-            const newTextWidth = font.widthOfTextAtSize(newPriceText, fontSize);
+                // Draw Price BELOW the code
+                // Assuming items are roughly 10-12px height
+                const fontSize = 9;
+                const yOffset = 12;
 
-            // Use the larger of: original price width or new text width
-            const rectWidth = Math.max(priceInfo.width, newTextWidth) + 4;
-            const rectHeight = priceInfo.height + 4;
-
-            const padding = 2;
-
-            try {
-                // Draw white rectangle to cover ONLY the old price
-                page.drawRectangle({
-                    x: priceInfo.x - padding,
-                    y: priceInfo.y - padding - 2, // Slight adjustment for baseline
-                    width: rectWidth,
-                    height: rectHeight,
-                    color: rgb(1, 1, 1),
-                });
-
-                // Draw new price in red
                 page.drawText(newPriceText, {
-                    x: priceInfo.x,
-                    y: priceInfo.y,
+                    x: item.x,
+                    y: item.y - yOffset, // Below
                     size: fontSize,
                     font: font,
-                    color: rgb(0.8, 0, 0),
+                    color: rgb(0.8, 0, 0), // Red
                 });
-
                 successCount++;
-            } catch (err) {
-                // Skip individual price errors
             }
         }
 
-        console.log(`[CatalogMarkup] Updated ${successCount}/${prices.length} prices`);
+        console.log(`[CatalogMarkup] Injected ${successCount} prices into Visual PDF`);
+        return this.savePdf(pdfDoc, visualPdfPath, markupPercentage, successCount);
+    }
 
-        // Save the modified PDF
+    async savePdf(pdfDoc, originalPath, markup, count) {
         const pdfBytes = await pdfDoc.save();
-
-        // Generate output filename
-        const originalName = path.basename(pdfPath, '.pdf');
-        const timestamp = Date.now();
-        const outputFilename = `${originalName}_markup_${markupPercentage}pct_${timestamp}.pdf`;
+        const originalName = path.basename(originalPath, '.pdf');
+        const outputFilename = `${originalName}_markup_${markup}pct_${Date.now()}.pdf`;
         const outputPath = path.join(this.outputDir, outputFilename);
-
         fs.writeFileSync(outputPath, pdfBytes);
-        console.log(`[CatalogMarkup] Saved to: ${outputPath}`);
 
         return {
-            outputPath: outputPath,
-            outputFilename: outputFilename,
-            pricesUpdated: successCount,
-            pricesFound: prices.length,
-            markupApplied: markupPercentage
+            outputPath,
+            outputFilename,
+            pricesUpdated: count
         };
     }
+
 }
 
 module.exports = new CatalogMarkupService();
