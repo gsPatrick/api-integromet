@@ -217,7 +217,12 @@ class CatalogMarkupService {
 
         // 2. Extract Codes from Visual Catalog
         const pdfBuffer = fs.readFileSync(visualPdfPath);
-        const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,8}\b/g);
+        // RegEx extended for:
+        // 1. Standard numeric: 2000711 (4-8 digits)
+        // 2. Alphanumeric: LVT 6011, LBL 6016 (2-3 chars + space? + digits)
+        const codeRegex = /(?:\b[A-Z]{2,3}\s?\d{4,6}\b|\b\d{4,8}\b)/g;
+
+        const codes = await this.extractItemsFromPdf(pdfBuffer, codeRegex);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in visual catalog. Matching...`);
 
         // 3. Edit PDF
