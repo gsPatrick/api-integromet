@@ -89,26 +89,48 @@ class CatalogMarkupService {
                 lines[y].push(item.str);
             });
 
-            // Process each line
-            Object.values(lines).forEach(lineParts => {
+            // Process each line (sorted by Y descending for logic flow, but lines object keys are Y strings)
+            // Need to sort keys to process sequentially top-down or bottom-up?
+            // PDF Y usually grows upwards (0 at bottom). So top items have HIGHER Y.
+            // We should process from High Y to Low Y to read line by line natural order.
+
+            const sortedYs = Object.keys(lines).map(Number).sort((a, b) => b - a); // Descending Y (Top to Bottom)
+
+            let lastCode = null;
+
+            sortedYs.forEach(y => {
+                const lineParts = lines[y];
                 const fullLine = lineParts.join(' ');
 
-                // Look for pairs of Code and Price
-                // Regex for 4-8 digit code: \b\d{4,8}\b
-                // Regex for price: R\$\s?[\d.,]+ OR just number like 1.234,56 if R$ missing
-
+                // Matches
                 const codeMatch = fullLine.match(/\b\d{4,8}\b/);
-                // Try broader price regex: (R\$\s?)?(\d{1,3}(\.\d{3})*,\d{2})
+                // Regex for price: (R$ )? XX,XX
                 const priceMatch = fullLine.match(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/);
 
                 if (codeMatch && priceMatch) {
+                    // Perfect match on same line
                     const code = codeMatch[0];
-                    const priceStr = priceMatch[1] || priceMatch[0]; // Capture group 1 has number part
+                    const priceStr = priceMatch[1] || priceMatch[0];
                     const price = this.parseBrazilianPrice(priceStr);
-
-                    if (price > 0) {
-                        priceMap.set(code, price);
-                    }
+                    if (price > 0) priceMap.set(code, price);
+                    lastCode = null; // Reset
+                } else if (codeMatch) {
+                    // Code found, but no price. Wait for next line.
+                    lastCode = codeMatch[0];
+                } else if (priceMatch && lastCode) {
+                    // Price found, and we have a pending code from previous (upper) line
+                    const priceStr = priceMatch[1] || priceMatch[0];
+                    const price = this.parseBrazilianPrice(priceStr);
+                    if (price > 0) priceMap.set(lastCode, price);
+                    // Don't reset lastCode yet if we support multiple prices? 
+                    // Usually we just want the first price found for the base code.
+                    lastCode = null;
+                } else {
+                    // Reset if line has neither (e.g. Header text or garbage), 
+                    // unless it's strictly the next line? 
+                    // Let's be lenient: keep lastCode for 1-2 lines? 
+                    // For now, reset if we see a new code or strict break.
+                    // But in Tables, usually empty lines are rare or ignored.
                 }
             });
         }
@@ -178,12 +200,11 @@ class CatalogMarkupService {
     async generateMergedPdf(visualPdfPath, pricePdfPath, markupPercentage) {
         console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price: ${pricePdfPath}`);
 
-        // 1. Build Price Map
+        // 1. Build Price Map with enhanced multi-line parser
         const priceMap = await this.extractPriceMapFromPdf(fs.readFileSync(pricePdfPath));
 
         // 2. Extract Codes from Visual PDF
         const pdfBuffer = fs.readFileSync(visualPdfPath);
-        // Regex for codes: 4 to 8 digits standalone
         const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,8}\b/g);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in Visual PDF`);
 
@@ -206,14 +227,18 @@ class CatalogMarkupService {
                 const newValue = originalPrice * (1 + markupPercentage / 100);
                 const newPriceText = this.formatBrazilianPrice(newValue);
 
-                // Draw Price BELOW the code
-                // Assuming items are roughly 10-12px height
-                const fontSize = 9;
-                const yOffset = 12;
+                // POSITION ADJUSTMENT:
+                // Move text to the RIGHT of the code to avoid overlap with description below
+                // Assuming code width ~40-60px
+                const fontSize = 10;
+                const xOffset = item.width + 12; // 12px padding to right
+
+                // Keep Y same as code (aligned baseline) or slightly adjusted
+                // Usually pdf-lib baseline matches.
 
                 page.drawText(newPriceText, {
-                    x: item.x,
-                    y: item.y - yOffset, // Below
+                    x: item.x + xOffset,
+                    y: item.y, // Same line
                     size: fontSize,
                     font: font,
                     color: rgb(0.8, 0, 0), // Red
