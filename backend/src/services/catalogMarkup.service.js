@@ -10,9 +10,6 @@
 const fs = require('fs');
 const path = require('path');
 
-const fs = require('fs');
-const path = require('path');
-
 class CatalogMarkupService {
 
     constructor() {
@@ -97,15 +94,17 @@ class CatalogMarkupService {
                 const fullLine = lineParts.join(' ');
 
                 // Look for pairs of Code and Price
-                // Regex for 4-6 digit code: \b\d{4,6}\b
-                // Regex for price: R\$\s?[\d.,]+
+                // Regex for 4-8 digit code: \b\d{4,8}\b
+                // Regex for price: R\$\s?[\d.,]+ OR just number like 1.234,56 if R$ missing
 
-                const codeMatch = fullLine.match(/\b\d{4,6}\b/);
-                const priceMatch = fullLine.match(/R\$\s?[\d.,]+/);
+                const codeMatch = fullLine.match(/\b\d{4,8}\b/);
+                // Try broader price regex: (R\$\s?)?(\d{1,3}(\.\d{3})*,\d{2})
+                const priceMatch = fullLine.match(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/);
 
                 if (codeMatch && priceMatch) {
                     const code = codeMatch[0];
-                    const price = this.parseBrazilianPrice(priceMatch[0]);
+                    const priceStr = priceMatch[1] || priceMatch[0]; // Capture group 1 has number part
+                    const price = this.parseBrazilianPrice(priceStr);
 
                     if (price > 0) {
                         priceMap.set(code, price);
@@ -184,8 +183,8 @@ class CatalogMarkupService {
 
         // 2. Extract Codes from Visual PDF
         const pdfBuffer = fs.readFileSync(visualPdfPath);
-        // Regex for codes: 4 to 6 digits standalone
-        const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,6}\b/g);
+        // Regex for codes: 4 to 8 digits standalone
+        const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,8}\b/g);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in Visual PDF`);
 
         // 3. Edit PDF
