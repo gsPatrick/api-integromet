@@ -220,6 +220,11 @@ class CatalogMarkupService {
         return this.savePdf(pdfDoc, pdfPath, markupPercentage, successCount);
     }
 
+    normalizeCode(code) {
+        if (!code) return '';
+        return code.replace(/\s+/g, '').toUpperCase();
+    }
+
     async generateMergedPdf(visualPdfPath, pricePdfPaths, markupPercentage) {
         console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price Files: ${pricePdfPaths.length}`);
 
@@ -232,12 +237,10 @@ class CatalogMarkupService {
                 const fileBuffer = fs.readFileSync(pPath);
                 const fileMap = await pdfParserAIService.parsePricePdf(fileBuffer);
 
-                // Merge into master
+                // Merge into master with NORMALIZED keys
                 fileMap.forEach((value, key) => {
-                    // key is Code, value is Array of prices
-                    // If code exists, maybe merge or overwrite? Usually overwrite or unique codes per files.
-                    // Let's overwrite/add
-                    masterPriceMap.set(key, value);
+                    const normalizedKey = this.normalizeCode(key);
+                    masterPriceMap.set(normalizedKey, value);
                 });
                 console.log(`[CatalogMarkup] Merged ${fileMap.size} codes from ${path.basename(pPath)}`);
             } catch (err) {
@@ -252,7 +255,8 @@ class CatalogMarkupService {
         // RegEx extended for:
         // 1. Standard numeric: 2000711 (4-8 digits)
         // 2. Alphanumeric: LVT 6011, LBL 6016 (2-3 chars + space? + digits)
-        const codeRegex = /(?:\b[A-Z]{2,3}\s?\d{4,6}\b|\b\d{4,8}\b)/g;
+        // Update: \s* allows flexible spacing
+        const codeRegex = /(?:\b[A-Z]{2,3}\s*\d{4,6}\b|\b\d{4,8}\b)/g;
 
         const codes = await this.extractItemsFromPdf(pdfBuffer, codeRegex);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in visual catalog. Matching...`);
@@ -268,7 +272,8 @@ class CatalogMarkupService {
 
         for (const item of codes) {
             const code = item.text;
-            const priceList = masterPriceMap.get(code); // Array
+            const normalizedCode = this.normalizeCode(code);
+            const priceList = masterPriceMap.get(normalizedCode); // Lookup by normalized key
 
             if (priceList && priceList.length > 0) {
                 const page = pages[item.pageIndex];
