@@ -31,6 +31,12 @@ async function initSettings() {
             description: 'Status/Situação no Bling quando pedido é pago (ex: Atendido)'
         });
 
+        await Setting.upsert({
+            key: 'campaign_description',
+            value: 'Milon Inverno Jan 26',
+            description: 'Texto adicionado ao final da descrição do produto (Coleção)'
+        });
+
         console.log('Settings initialized.');
         process.exit(0);
     } catch (error) {

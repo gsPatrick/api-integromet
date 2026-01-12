@@ -233,7 +233,7 @@ class WebhookController {
 
             // Build product description
             // Format: 2000711 - Jaqueta Nylon (Tam: 2),(Cor: 0452 Off White) - Milon Inverno Jan 26
-            const collectionName = process.env.CATALOG_COLLECTION_NAME || '';
+            const collectionName = await SettingsController.getValue('campaign_description', '');
             let productDescription = '';
 
             if (produto.codigo) {
