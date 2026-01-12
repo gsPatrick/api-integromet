@@ -377,7 +377,7 @@ class CatalogController {
                 return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
             }
 
-            const pricePdf = files['pricePdf'] ? files['pricePdf'][0] : null;
+            const pricePdfs = files['pricePdf'] || [];
             const markupPercentage = parseFloat(req.body.markupPercentage);
 
             if (isNaN(markupPercentage) || markupPercentage < 0) {
@@ -385,16 +385,17 @@ class CatalogController {
             }
 
             const pdfPath = visualPdf.path;
-            const pricePdfPath = pricePdf ? pricePdf.path : null;
+            // Map to array of paths
+            const pricePdfPaths = pricePdfs.map(f => f.path);
             const originalName = visualPdf.originalname || 'catalog.pdf';
 
-            console.log(`[CatalogController] Generating markup PDF: ${originalName} + ${pricePdf ? 'Price List' : 'No Price List'} with ${markupPercentage}%`);
+            console.log(`[CatalogController] Generating markup PDF: ${originalName} + ${pricePdfPaths.length} Price Lists with ${markupPercentage}%`);
 
             // Generate the markup PDF
             const result = await catalogMarkupService.generateMarkupPdf(
                 pdfPath,
                 markupPercentage,
-                pricePdfPath
+                pricePdfPaths
             );
 
             // Return the file for download
@@ -405,7 +406,11 @@ class CatalogController {
                 // Clean up the uploaded files after processing
                 try {
                     if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
-                    if (pricePdfPath && fs.existsSync(pricePdfPath)) fs.unlinkSync(pricePdfPath);
+                    if (pricePdfPaths.length > 0) {
+                        pricePdfPaths.forEach(p => {
+                            if (fs.existsSync(p)) fs.unlinkSync(p);
+                        });
+                    }
                 } catch (e) {
                     console.warn('[CatalogController] Could not delete uploaded files:', e.message);
                 }

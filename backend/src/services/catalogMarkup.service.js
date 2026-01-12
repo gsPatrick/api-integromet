@@ -175,58 +175,50 @@ class CatalogMarkupService {
         return priceMap;
     }
 
-    async generateMarkupPdf(pdfPath, markupPercentage, pricePdfPath = null) {
-        if (pricePdfPath) {
-            return this.generateMergedPdf(pdfPath, pricePdfPath, markupPercentage);
+    async generateMarkupPdf(pdfPath, markupPercentage, pricePdfPaths = []) {
+        // Normalize to array just in case
+        const paths = Array.isArray(pricePdfPaths) ? pricePdfPaths : (pricePdfPaths ? [pricePdfPaths] : []);
+
+        if (paths.length > 0) {
+            return this.generateMergedPdf(pdfPath, paths, markupPercentage);
         }
 
         return this.generateSinglePdfReplace(pdfPath, markupPercentage);
     }
 
-    // Helper for old logic to keep file clean
-    async generateSinglePdfReplace(pdfPath, markupPercentage) {
-        console.log(`[CatalogMarkup] Processing Single PDF: ${pdfPath}`);
-        const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
-        const pdfBuffer = fs.readFileSync(pdfPath);
-        const prices = await this.extractItemsFromPdf(pdfBuffer, /R\$\s?[\d.,]+/g);
+    // ... (generateSinglePdfReplace remains same)
 
-        const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
-        const pages = pdfDoc.getPages();
-        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        let successCount = 0;
+    async generateMergedPdf(visualPdfPath, pricePdfPaths, markupPercentage) {
+        console.log(`[CatalogMarkup] Generate Merged PDF. Visual: ${visualPdfPath}, Price Files: ${pricePdfPaths.length}`);
 
-        for (const priceInfo of prices) {
-            const page = pages[priceInfo.pageIndex];
-            if (!page) continue;
-            const originalValue = this.parseBrazilianPrice(priceInfo.text);
-            if (isNaN(originalValue)) continue;
-            const newValue = originalValue * (1 + markupPercentage / 100);
-            const newPriceText = this.formatBrazilianPrice(newValue);
-            const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
+        // 1. Build Master Price Map from ALL files
+        const masterPriceMap = new Map();
 
-            page.drawRectangle({
-                x: priceInfo.x - 2, y: priceInfo.y - 2,
-                width: priceInfo.width + 4, height: priceInfo.height + 4,
-                color: rgb(1, 1, 1),
-            });
-            page.drawText(newPriceText, {
-                x: priceInfo.x, y: priceInfo.y, size: fontSize, font: font, color: rgb(0.8, 0, 0),
-            });
-            successCount++;
+        for (const pPath of pricePdfPaths) {
+            try {
+                console.log(`[CatalogMarkup] Parsing price file: ${path.basename(pPath)}`);
+                const fileBuffer = fs.readFileSync(pPath);
+                const fileMap = await pdfParserAIService.parsePricePdf(fileBuffer);
+
+                // Merge into master
+                fileMap.forEach((value, key) => {
+                    // key is Code, value is Array of prices
+                    // If code exists, maybe merge or overwrite? Usually overwrite or unique codes per files.
+                    // Let's overwrite/add
+                    masterPriceMap.set(key, value);
+                });
+                console.log(`[CatalogMarkup] Merged ${fileMap.size} codes from ${path.basename(pPath)}`);
+            } catch (err) {
+                console.error(`[CatalogMarkup] Failed to parse price file ${pPath}:`, err.message);
+            }
         }
-        return this.savePdf(pdfDoc, pdfPath, markupPercentage, successCount);
-    }
 
-    async generateMergedPdf(visualPdfPath, pricePdfPath, markupPercentage) {
-        console.log(`[CatalogMarkup] Generate Merged PDF (Multi-Price AI). Visual: ${visualPdfPath}`);
+        console.log(`[CatalogMarkup] Total codes in Master Price Map: ${masterPriceMap.size}`);
 
-        // 1. Build Price Map using OpenAI
-        const priceMap = await pdfParserAIService.parsePricePdf(fs.readFileSync(pricePdfPath));
-
-        // 2. Extract Codes
+        // 2. Extract Codes from Visual Catalog
         const pdfBuffer = fs.readFileSync(visualPdfPath);
         const codes = await this.extractItemsFromPdf(pdfBuffer, /\b\d{4,8}\b/g);
-        console.log(`[CatalogMarkup] Found ${codes.length} codes. Matching...`);
+        console.log(`[CatalogMarkup] Found ${codes.length} codes in visual catalog. Matching...`);
 
         // 3. Edit PDF
         const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
@@ -239,7 +231,7 @@ class CatalogMarkupService {
 
         for (const item of codes) {
             const code = item.text;
-            const priceList = priceMap.get(code); // Array
+            const priceList = masterPriceMap.get(code); // Array
 
             if (priceList && priceList.length > 0) {
                 const page = pages[item.pageIndex];

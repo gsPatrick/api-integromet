@@ -244,9 +244,10 @@ export default function CatalogPage() {
                             type="file"
                             id="pricePdfFile"
                             accept="application/pdf"
+                            multiple
                             style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '2px solid #ffcc80', background: 'white', fontSize: '0.9rem', cursor: 'pointer', outline: 'none' }}
                         />
-                        <p style={{ fontSize: '0.75rem', color: '#e65100', marginTop: '4px' }}>Opcional se o catálogo já tiver preços</p>
+                        <p style={{ fontSize: '0.75rem', color: '#e65100', marginTop: '4px' }}>Opcional: Selecione um ou múltiplos PDFs de preço</p>
                     </div>
 
                     <div>
@@ -288,8 +289,10 @@ export default function CatalogPage() {
                                 formData.append('pdf', file);
 
                                 const priceInput = document.getElementById('pricePdfFile');
-                                if (priceInput && priceInput.files && priceInput.files[0]) {
-                                    formData.append('pricePdf', priceInput.files[0]);
+                                if (priceInput && priceInput.files && priceInput.files.length > 0) {
+                                    for (let i = 0; i < priceInput.files.length; i++) {
+                                        formData.append('pricePdf', priceInput.files[i]);
+                                    }
                                 }
 
                                 formData.append('markupPercentage', parseFloat(markup));

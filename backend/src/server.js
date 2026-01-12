@@ -100,7 +100,7 @@ app.delete('/catalog/reset', catalogController.resetCatalog);
 app.post('/catalog/generate-markup', catalogController.generateMarkup);
 app.post('/catalog/generate-markup-upload', pdfUpload.fields([
     { name: 'pdf', maxCount: 1 },
-    { name: 'pricePdf', maxCount: 1 }
+    { name: 'pricePdf', maxCount: 20 }
 ]), catalogController.generateMarkupFromUpload);
 
 // Protected Routes (Require x-api-token)
