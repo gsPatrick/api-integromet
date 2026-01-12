@@ -232,9 +232,30 @@ class WebhookController {
             }
 
             // Build product description
-            let productDescription = produto.descricao || 'Produto WhatsApp';
+            // Format: 2000711 - Jaqueta Nylon (Tam: 2),(Cor: 0452 Off White) - Milon Inverno Jan 26
+            const collectionName = process.env.CATALOG_COLLECTION_NAME || '';
+            let productDescription = '';
+
             if (produto.codigo) {
-                productDescription = `[${produto.codigo}] ${productDescription}`;
+                productDescription += `${produto.codigo} - `;
+            }
+
+            productDescription += produto.descricao || 'Produto WhatsApp';
+
+            if (produto.tamanho) {
+                productDescription += ` (Tam: ${produto.tamanho})`;
+            }
+
+            const colorParts = [];
+            if (produto.codigo_cor) colorParts.push(produto.codigo_cor);
+            if (produto.cor) colorParts.push(produto.cor);
+
+            if (colorParts.length > 0) {
+                productDescription += `,(Cor: ${colorParts.join(' ')})`;
+            }
+
+            if (collectionName) {
+                productDescription += ` - ${collectionName}`;
             }
 
             // Create order
