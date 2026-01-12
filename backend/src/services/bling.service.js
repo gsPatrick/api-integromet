@@ -174,10 +174,11 @@ class BlingService {
                 let sku = 'WAPP-' + order.id;
                 let baseCode = null;
 
-                // Try to extract code from [CODE] Name format
-                const codeMatch = (order.productRaw || '').match(/^\[([\w-]+)\]/);
+                // Try to extract code from [CODE] Name format OR Code - Name
+                // Matches: [12345] or 12345 - 
+                const codeMatch = (order.productRaw || '').match(/^(?:\[([\w-]+)\]|(\d+)\s?-)/);
                 if (codeMatch) {
-                    baseCode = codeMatch[1];
+                    baseCode = codeMatch[1] || codeMatch[2];
                 }
 
                 // Construct a smart SKU: CODE-COLORCODE-SIZE
@@ -193,12 +194,14 @@ class BlingService {
                 let product = await this._findProduct(token, sku);
                 if (!product) {
                     // Create it
-                    const details = [];
-                    if (order.extractedColor) details.push(`Cor: ${order.extractedColor}`);
-                    if (order.extractedSize) details.push(`Tam: ${order.extractedSize}`);
+                    // Use productRaw as name if available, just cleaning [Code] if old format
+                    let productName = order.productRaw || 'Produto WhatsApp';
 
-                    const productName = (order.productRaw || 'Produto WhatsApp').replace(/^\[[\w-]+\]\s*/, '') +
-                        (details.length > 0 ? ` (${details.join(', ')})` : '');
+                    // If old format [Code], clean it for name
+                    if (productName.startsWith('[')) {
+                        productName = productName.replace(/^\[[\w-]+\]\s*/, '') +
+                            ((order.extractedColor || order.extractedSize) ? ` (${[order.extractedColor, order.extractedSize].filter(Boolean).join(', ')})` : '');
+                    }
 
                     product = await this._createProduct(token, {
                         sku: sku,
@@ -208,19 +211,13 @@ class BlingService {
                 }
 
                 // 3. Add to Order Items
-                // Format: 362648 - Blusa (Tam: M), (Cor: Off White), Farm Jan 26
-                let customDesc = '';
-                if (baseCode) customDesc += `${baseCode} - `;
+                // Just use productRaw as description. It is usually well formatted by Webhook.
+                let customDesc = order.productRaw || 'Produto WhatsApp';
 
-                const cleanName = (order.productRaw || 'Produto WhatsApp').replace(/^\[[\w-]+\]\s*/, '');
-                customDesc += cleanName;
-
-                const descDetails = [];
-                if (order.extractedSize) descDetails.push(`(Tam: ${order.extractedSize})`);
-                if (order.extractedColor) descDetails.push(`(Cor: ${order.extractedColor})`);
-
-                if (descDetails.length > 0) customDesc += ` ${descDetails.join(', ')}`;
-                if (campaignDescription) customDesc += `, ${campaignDescription}`;
+                // Only append suffix if it's NOT already there
+                if (campaignDescription && !customDesc.includes(campaignDescription)) {
+                    customDesc += ` - ${campaignDescription}`;
+                }
 
                 const itemPayload = {
                     descricao: customDesc,
@@ -232,7 +229,7 @@ class BlingService {
                 if (product && product.id) {
                     itemPayload.produto = { id: product.id };
                 } else {
-                    itemPayload.codigo = sku; // Fallback to code if ID missing (shouldn't happen)
+                    itemPayload.codigo = sku;
                 }
 
                 orderItems.push(itemPayload);
