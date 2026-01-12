@@ -208,8 +208,22 @@ class BlingService {
                 }
 
                 // 3. Add to Order Items
+                // Format: 362648 - Blusa (Tam: M), (Cor: Off White), Farm Jan 26
+                let customDesc = '';
+                if (baseCode) customDesc += `${baseCode} - `;
+
+                const cleanName = (order.productRaw || 'Produto WhatsApp').replace(/^\[[\w-]+\]\s*/, '');
+                customDesc += cleanName;
+
+                const descDetails = [];
+                if (order.extractedSize) descDetails.push(`(Tam: ${order.extractedSize})`);
+                if (order.extractedColor) descDetails.push(`(Cor: ${order.extractedColor})`);
+
+                if (descDetails.length > 0) customDesc += ` ${descDetails.join(', ')}`;
+                if (campaignDescription) customDesc += `, ${campaignDescription}`;
+
                 const itemPayload = {
-                    descricao: (order.productRaw || 'Produto WhatsApp'), // Keep original desc for reference
+                    descricao: customDesc,
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
                     unidade: 'UN'

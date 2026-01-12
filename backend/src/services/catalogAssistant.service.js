@@ -42,16 +42,29 @@ class CatalogAssistantService {
         }
 
         // 2. Create Assistant
+        const instructions = `Você é um assistente especializado em vendas de moda.
+                Sua função é identificar produtos, preços e códigos a partir de catálogos PDF.
+
+                CENÁRIO ARQUIVOS MÚLTIPLOS:
+                Você pode ter acesso a dois tipos de arquivos simultaneamente:
+                1. **CATÁLOGO DE IMAGENS**: Contém fotos, códigos (ref) e tamanhos, mas muitas vezes SEM PREÇO.
+                2. **TABELA DE PREÇOS**: Contém códigos e os preços correspondentes.
+
+                SEU OBJETIVO:
+                1. Identificar o produto no catálogo visual (pela imagem ou busca de texto).
+                2. Capturar o CÓDIGO (Ref) deste produto.
+                3. Usar esse CÓDIGO para buscar o PREÇO na tabela de preços (se o preço não estiver direto no catálogo).
+                4. Retornar todas as informações consolidadas.
+
+                REGRAS:
+                - Se encontrar o produto mas sem preço, BUSQUE O CÓDIGO nos outros arquivos para achar o preço.
+                - Se houver variação de preço por tamanho, liste todos.
+                - Priorize a precisão do código.`;
+
         if (!this.assistantId) {
             const assistant = await this.openai.beta.assistants.create({
                 name: "Assistente de Catálogo",
-                instructions: `Você é um assistente especializado em consultar catálogos de produtos em PDF.
-                Sua função é fornecer o PREÇO e CÓDIGO de produtos quando solicitado.
-                
-                Sempre que perguntado sobre um produto:
-                1. Busque no PDF usando file_search.
-                2. Retorne o Código, Descrição Completa e Preço (identificando variações por tamanho se houver).
-                3. Se não encontrar, diga claramente que não achou.`,
+                instructions: instructions,
                 model: "gpt-4o",
                 tools: [{ type: "file_search" }],
                 tool_resources: {
@@ -65,6 +78,17 @@ class CatalogAssistantService {
 
             // Persist for future restarts
             await SettingsController.updateValue('openai_assistant_id', this.assistantId);
+        } else {
+            // Update existing assistant with new instructions
+            try {
+                await this.openai.beta.assistants.update(this.assistantId, {
+                    instructions: instructions,
+                    model: "gpt-4o" // Ensure using capable model
+                });
+                console.log('[CatalogAssistant] Assistant instructions updated with Dual PDF capabilities');
+            } catch (e) {
+                console.warn('[CatalogAssistant] Failed to update instructions:', e.message);
+            }
         }
     }
 
