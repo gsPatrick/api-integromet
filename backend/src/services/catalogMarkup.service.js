@@ -244,38 +244,50 @@ class CatalogMarkupService {
                 const page = pages[item.pageIndex];
                 if (!page) continue;
 
-                const fontSize = 10;
-                const labelFontSize = 9;
-                const lineHeight = 12;
-                const xOffset = item.width + 12; // Right of code
+                const fontSize = 11; // Increased from 10
+                const lineHeight = 11; // Compact spacing
+                const xOffset = item.width + 10; // Right of code
+
+                // Adjust Start Y based on number of lines to center vertically or grow upwards?
+                // Visual PDF has code baseline. Descriptions are below.
+                // We should start slightly higher to allow list to grow downwards without hitting description.
+                // Or grow Upwards? No, standard is list top-down.
+                // Let's shift start Y up by (lines - 1) * partial_height?
+                // Or simply start at y + 5 to clear baseline.
+                const startY = item.y + (priceList.length > 1 ? 5 : 0);
 
                 // Draw list of prices
                 priceList.forEach((p, idx) => {
                     const newValue = p.price * (1 + markupPercentage / 100);
                     const newPriceText = this.formatBrazilianPrice(newValue);
                     const labelText = p.label ? `${p.label} ` : '';
-                    const fullText = p.label ? `${labelText}  ${newPriceText}` : newPriceText;
 
-                    // Draw Label (Black)
+                    const currentY = startY - (idx * lineHeight);
+
+                    // Draw Label (Red & Bold)
+                    // Note: labelFont was Helvetica. Request "Maior" usually implies Bold visibility too?
+                    // Let's use Bold for everything.
+
                     if (p.label) {
                         page.drawText(labelText, {
                             x: item.x + xOffset,
-                            y: item.y - (idx * lineHeight),
-                            size: labelFontSize,
-                            font: labelFont,
-                            color: rgb(0, 0, 0), // Black label
+                            y: currentY,
+                            size: fontSize,
+                            font: font, // Using HelveticaBold for label too
+                            color: rgb(0.8, 0, 0), // RED
                         });
                     }
 
                     // Draw Price (Red) - Position after label
-                    const labelWidth = p.label ? labelFont.widthOfTextAtSize(labelText, labelFontSize) : 0;
+                    // We need width of label in Bold font
+                    const labelWidth = p.label ? font.widthOfTextAtSize(labelText, fontSize) : 0;
 
                     page.drawText(newPriceText, {
                         x: item.x + xOffset + labelWidth,
-                        y: item.y - (idx * lineHeight),
+                        y: currentY,
                         size: fontSize,
                         font: font,
-                        color: rgb(0.8, 0, 0), // Red price
+                        color: rgb(0.8, 0, 0), // RED
                     });
                 });
 
