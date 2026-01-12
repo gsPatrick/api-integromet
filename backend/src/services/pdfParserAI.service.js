@@ -67,7 +67,7 @@ class PdfParserAIService {
     async analyzeTextCheck(text) {
         const prompt = `
         Você é um especialista em extração de dados de tabelas de preços desestruturadas.
-        Analise o texto abaixo extraído de uma página de PDF e extraia os produtos em JSON.
+        Analise o texto abaixo extraído de uma página de PDF e extraia TODOS os produtos em JSON.
 
         ESTRUTURA DA RESPOSTA (Array de objetos):
         [
@@ -81,15 +81,21 @@ class PdfParserAIService {
           }
         ]
 
-        REGRAS CRÍTICAS:
-        1. Identifique Códigos de Produto (Geralmente 4 a 8 dígitos, ex: 2001424, 2001527).
-        2. Identifique PREÇOS (R$ XX,XX).
-        3. Identifique VARIAÇÕES DE TAMANHO (Labels).
-           - Muitas vezes os tamanhos aparecem como CABEÇALHOS acima dos produtos (Ex: "1 a 3   4 a 8" ou "0A3M a 3A6M").
-           - Se houver uma linha de tamanhos, aplique-a aos produtos listados abaixo dela até que apareça outro cabeçalho.
-           - Se o produto tiver múltiplos preços na mesma linha ou linhas próximas, associe cada preço ao seu tamanho correspondente do cabeçalho.
-        4. Converta valores para number (float).
-        5. Retorne APENAS o JSON válido, sem markdown.
+        REGRAS CRÍTICAS DE EXTRAÇÃO:
+        1. **Varredura Completa**: O texto pode estar em colunas (produtos lado a lado). Analise TODO o texto. Não pare no primeiro item.
+        2. **Identificação de Códigos**: 
+           - Procure por códigos numéricos (ex: 2001424) OU alfanuméricos curtos (ex: LVT 6011, LBL 6016) se seguidos por preço.
+           - Geralmente de 4 a 8 caracteres.
+        3. **Preços e Tamanhos**:
+           - Associe cada preço ao seu tamanho/grade (Ex: "1 a 3   4 a 8").
+           - Se os tamanhos estiverem em uma linha separada acima, aplique-os a todos os produtos abaixo até o próximo cabeçalho.
+        4. **Validação (Passo Final)**:
+           - Antes de gerar a resposta, REVISE o texto original.
+           - Verifique se você não esqueceu nenhum código que tenha um preço próximo (R$).
+           - Se houver dois produtos na mesma linha horizontal, extraia AMBOS.
+        5. **Formato**:
+           - Converta valores R$ para float (ponto).
+           - JSON puro, sem markdown.
 
         TEXTO DO PDF:
         ${text}
