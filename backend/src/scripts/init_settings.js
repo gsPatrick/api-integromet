@@ -34,7 +34,7 @@ async function initSettings() {
         await Setting.upsert({
             key: 'campaign_description',
             value: 'Milon Inverno Jan 26',
-            description: 'Texto adicionado ao final da descrição do produto (Coleção)'
+            description: 'Sufixo para descrição dos produtos (ex: coleção/campanha)'
         });
 
         console.log('Settings initialized.');
