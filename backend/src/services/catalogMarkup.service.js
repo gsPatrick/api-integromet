@@ -92,79 +92,75 @@ class CatalogMarkupService {
             // Process each line (sorted by Y descending for logic flow)
             const sortedYs = Object.keys(lines).map(Number).sort((a, b) => b - a);
 
-            // State approach: We iterate top-down.
-            // We need to look ahead or keep buffer.
-            // Let's iterate index-based on sortedYs to peek next/prev.
+            let currentSizeLabels = [];
+
+            // Helper to detect size line
+            const isSizeLine = (str) => {
+                // Not a code line
+                if (/\b\d{4,8}\b/.test(str)) return false;
+                // Has size patterns
+                const sizePatterns = [
+                    /\b\d{1,2}\s?a\s?\d{1,2}\b/, // 1 a 3
+                    /\b(RN|P|M|G|GG|XG)\b/,       // P M G
+                    /\b(UN|ÚNICO)\b/i
+                ];
+                return sizePatterns.some(p => p.test(str));
+            };
+
+            const extractSizes = (str) => {
+                // Regex to capture individual size tokens
+                const tokenRegex = /\b(\d{1,2}\s?a\s?\d{1,2}|RN|P|M|G|GG|XG|UN|ÚNICO)\b/gi;
+                return [...str.matchAll(tokenRegex)].map(m => m[0]);
+            };
 
             for (let i = 0; i < sortedYs.length; i++) {
                 const y = sortedYs[i];
                 const lineParts = lines[y];
                 const fullLine = lineParts.join(' ');
 
+                // Check for Size Header Line FIRST
+                if (isSizeLine(fullLine)) {
+                    const extracted = extractSizes(fullLine);
+                    if (extracted.length > 0) {
+                        currentSizeLabels = extracted;
+                        // console.log(`[Parser] Updated Size Labels at Y=${y}:`, currentSizeLabels);
+                        continue; // Assume this line is just headers
+                    }
+                }
+
+                // Check for Code
                 const codeMatch = fullLine.match(/\b\d{4,8}\b/);
 
-                // Find ALL prices in the line
-                // matchAll returns iterator. regex global flag required.
+                // Find Preços
                 const priceMatches = [...fullLine.matchAll(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/g)];
 
                 if (codeMatch) {
                     const code = codeMatch[0];
                     let extractedPrices = [];
 
-                    // CASE 1: Prices on SAME line as Code
+                    // CASE 1: Prices on SAME line
                     if (priceMatches.length > 0) {
-                        extractedPrices = priceMatches.map(m => ({
+                        extractedPrices = priceMatches.map((m, idx) => ({
                             price: this.parseBrazilianPrice(m[1] || m[0]),
-                            label: '' // No explicit size label on same line usually, unless parsed
+                            label: currentSizeLabels[idx] || ''
                         }));
                     }
                     // CASE 2: Prices on NEXT line(s)
-                    // Look ahead 1-2 lines
                     else {
-                        // Check next line (i+1)
                         if (i + 1 < sortedYs.length) {
                             const nextLine = lines[sortedYs[i + 1]].join(' ');
                             const nextPrices = [...nextLine.matchAll(/(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/g)];
 
                             if (nextPrices.length > 0) {
-                                // Check if there is a SIZE line in between or same line?
-                                // Sometimes sizes are on the line WITH the code, or the line WITH the prices, or line BETWEEN.
-                                // Let's look for Size Labels in CURRENT line (with Code) or NEXT line (with Prices) or Previous?
-
-                                // Simple Heuristic: If we found prices in Next Line, look for Sizes in Next Line (before prices) or Current Line.
-
-                                // Extract "1 a 3", "4 a 8", "P", "M", "G"
-                                // Regex: \b(\d{1,2}\s?a\s?\d{1,2}|P|M|G|GG|XG)\b
-                                const sizeRegex = /\b(\d{1,2}\s?a\s?\d{1,2}|P|M|G|GG|1\s?a\s?3|4\s?a\s?8|10\s?a\s?14)\b/g;
-
-                                // Try to find sizes in the line that had prices? Or the line before it?
-                                // User example:
-                                // Line 1: Code + Sizes?
-                                // Line 2: Prices
-                                // OR
-                                // Line 1: Code
-                                // Line 2: Sizes
-                                // Line 3: Prices
-
-                                // Let's try to capture sizes appearing in the vicinity.
-                                // For now, map by index: 1st size -> 1st price.
-
-                                const sizesInCodeLine = [...fullLine.matchAll(sizeRegex)].map(m => m[0]);
-                                const sizesInPriceLine = [...nextLine.matchAll(sizeRegex)].map(m => m[0]);
-                                // Also check line BETWEEN if any? (Not doing that yet)
-
-                                const sizes = [...sizesInCodeLine, ...sizesInPriceLine];
-
                                 extractedPrices = nextPrices.map((m, idx) => ({
                                     price: this.parseBrazilianPrice(m[1] || m[0]),
-                                    label: sizes[idx] || '' // Fallback to empty if no size match
+                                    label: currentSizeLabels[idx] || ''
                                 }));
                             }
                         }
                     }
 
                     if (extractedPrices.length > 0) {
-                        // Filter invalid
                         const validPrices = extractedPrices.filter(p => p.price > 0);
                         if (validPrices.length > 0) {
                             priceMap.set(code, validPrices);
