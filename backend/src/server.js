@@ -66,12 +66,7 @@ app.post('/campaigns', campaignController.createCampaign);
 app.get('/campaigns', campaignController.listCampaigns);
 app.put('/campaigns/:id', campaignController.updateCampaign);
 app.delete('/campaigns/:id', campaignController.deleteCampaign);
-// New Campaign Catalog Routes (Checked)
-app.post('/campaigns/:id/upload', pdfUpload.fields([
-    { name: 'pdf', maxCount: 1 },
-    { name: 'pricePdf', maxCount: 20 }
-]), campaignController.uploadFiles);
-app.post('/campaigns/:id/generate', campaignController.generateCatalog);
+// Campaign Routes Moved Below to satisfy Dependencies
 
 // Catalog Routes
 const catalogController = require('./controllers/catalog.controller');
@@ -103,6 +98,13 @@ const pdfUpload = multer({
     }
     // No file size limit
 });
+
+// New Campaign Catalog Routes (Now correctly placed)
+app.post('/campaigns/:id/upload', pdfUpload.fields([
+    { name: 'pdf', maxCount: 1 },
+    { name: 'pricePdf', maxCount: 20 }
+]), campaignController.uploadFiles);
+app.post('/campaigns/:id/generate', campaignController.generateCatalog);
 
 app.get('/catalog', catalogController.listProducts);
 app.get('/catalog/status', catalogController.getStatus);
