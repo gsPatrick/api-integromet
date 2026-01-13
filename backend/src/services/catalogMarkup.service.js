@@ -191,7 +191,10 @@ class CatalogMarkupService {
         console.log(`[CatalogMarkup] Processing Single PDF: ${pdfPath}`);
         const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
         const pdfBuffer = fs.readFileSync(pdfPath);
-        const prices = await this.extractItemsFromPdf(pdfBuffer, /R\$\s?[\d.,]+/g);
+        // Regex updated to capture prices WITH or WITHOUT "R$" prefix
+        // Matches: "R$ 202,37", "R$202,37", "122,70", "1.234,56"
+        const priceRegex = /(?:R\$\s?)?(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+        const prices = await this.extractItemsFromPdf(pdfBuffer, priceRegex);
 
         const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
         const pages = pdfDoc.getPages();
