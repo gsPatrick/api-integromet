@@ -303,29 +303,49 @@ class CatalogMarkupService {
                     const currentY = startY - (idx * lineHeight);
 
                     // Draw Label (Red & Bold)
-                    // Note: labelFont was Helvetica. Request "Maior" usually implies Bold visibility too?
-                    // Let's use Bold for everything.
-
                     if (p.label) {
                         page.drawText(labelText, {
                             x: item.x + xOffset,
                             y: currentY,
                             size: fontSize,
-                            font: font, // Using HelveticaBold for label too
-                            color: rgb(0.8, 0, 0), // RED
+                            font: font,
+                            color: rgb(0.8, 0, 0),
                         });
                     }
 
                     // Draw Price (Red) - Position after label
-                    // We need width of label in Bold font
                     const labelWidth = p.label ? font.widthOfTextAtSize(labelText, fontSize) : 0;
+
+                    // Background Box Calculation
+                    const priceWidth = font.widthOfTextAtSize(newPriceText, fontSize);
+                    const totalWidth = labelWidth + priceWidth;
+
+                    // Draw White Background Box to cover anything behind
+                    page.drawRectangle({
+                        x: item.x + xOffset - 2,
+                        y: currentY - 2,
+                        width: totalWidth + 4,
+                        height: fontSize + 4,
+                        color: rgb(1, 1, 1),
+                    });
+
+                    // Redraw Label (on top of white box)
+                    if (p.label) {
+                        page.drawText(labelText, {
+                            x: item.x + xOffset,
+                            y: currentY,
+                            size: fontSize,
+                            font: font,
+                            color: rgb(0.8, 0, 0),
+                        });
+                    }
 
                     page.drawText(newPriceText, {
                         x: item.x + xOffset + labelWidth,
                         y: currentY,
                         size: fontSize,
                         font: font,
-                        color: rgb(0.8, 0, 0), // RED
+                        color: rgb(0.8, 0, 0),
                     });
                 });
 
