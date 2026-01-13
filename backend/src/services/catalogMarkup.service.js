@@ -264,6 +264,12 @@ class CatalogMarkupService {
         const codes = await this.extractItemsFromPdf(pdfBuffer, codeRegex);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in visual catalog. Matching...`);
 
+        // 2b. Extract ALL text for collision detection (Obstacles)
+        // Match anything that includes non-whitespace characters
+        const obstacleRegex = /\S+/g;
+        const allObstacles = await this.extractItemsFromPdf(pdfBuffer, obstacleRegex);
+        console.log(`[CatalogMarkup] Found ${allObstacles.length} text obstacles for collision detection.`);
+
         // 3. Edit PDF
         const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
         const pdfDoc = await PDFDocument.load(new Uint8Array(pdfBuffer));
@@ -283,7 +289,7 @@ class CatalogMarkupService {
         for (const item of codes) {
             const code = item.text;
             const normalizedCode = this.normalizeCode(code);
-            const priceList = masterPriceMap.get(normalizedCode); // Lookup by normalized key
+            const priceList = masterPriceMap.get(normalizedCode);
 
             if (priceList && priceList.length > 0) {
                 const page = pages[item.pageIndex];
@@ -291,26 +297,10 @@ class CatalogMarkupService {
 
                 const fontSize = 11; // Increased from 10
                 const lineHeight = 11;
-                // Move X: Align with code start (centering might be better, but left-align is safer)
-                // Actually, let's slightly center or just add small padding
-                const xOffset = 0;
-
-                // Move Y: Position ABOVE code.
-                // We want the bottom-most price line to be comfortably above the code top.
-                // item.y is roughly baseline. item.height is ~10.
-                // So top of code is item.y + 10.
-                // We want bottom of price list at item.y + 15 (gap of 5).
-                // Formula: bottomLineY = startY - ( (n-1) * lineHeight )
-                // So: startY = targetBottomY + ( (n-1) * lineHeight )
-                // targetBottomY = item.y + 12;
-                const targetBottomY = item.y + 14;
-                const startY = targetBottomY + ((priceList.length - 1) * lineHeight);
-
-                // Calculate dimensions for Background Box
                 const boxPadding = 3;
-                let maxLineWidth = 0;
 
-                // Pre-calc width
+                // 1. Calculate Content Dimensions
+                let maxLineWidth = 0;
                 priceList.forEach(p => {
                     const newValue = p.price * (1 + markupPercentage / 100);
                     const newPriceText = this.formatBrazilianPrice(newValue);
@@ -319,54 +309,131 @@ class CatalogMarkupService {
                     const width = font.widthOfTextAtSize(fullText, fontSize);
                     if (width > maxLineWidth) maxLineWidth = width;
                 });
-
                 const boxWidth = maxLineWidth + (boxPadding * 2);
                 const boxHeight = (priceList.length * lineHeight) + (boxPadding * 2);
 
-                // Center Box relative to Text? Or Text relative to Box?
-                // Text starts at item.x. Box starts at item.x - padding.
-                const boxX = item.x + xOffset - boxPadding;
+                // 2. Define Candidate Positions
+                // We define the Box Rectangle {x, y, w, h}
 
-                // Box Y (bottom-left)
-                // Top of box = startY + fontHeight?
-                // drawText Y is baseline.
-                // drawRectangle Y is bottom-left.
-                // Top line Y (baseline) is startY.
-                // Top of text is startY + fontSize (roughly).
-                // So Box Top should be startY + fontSize + padding.
-                // Box Bottom should be boxTop - boxHeight.
-                // Let's deduce Box Y directly from bottom line.
-                // Bottom line baseline = startY - ((n-1)*LH).
-                // Bottom of text (descender) is slightly below baseline. Say -2.
-                // So Box Bottom = BottomLineBaseline - 3 - padding.
-                const lastLineY = startY - ((priceList.length - 1) * lineHeight);
-                const boxY = lastLineY - 3 - boxPadding;
+                // Position A: RIGHT (Preferred)
+                // Aligned with text baseline roughly, or slightly down? 
+                // Let's vertically align the TOP of the box with the TOP of the code text (roughly item.y + item.height)
+                // item.y is usually baseline. font height ~10.
+                const codeTopY = item.y + item.height;
+                // Let's place Box Top slightly below Code Top for alignment? Or centered?
+                // Simple: Box Top = BoxY + BoxHeight.
+                // We want Box Top = Code Top Y. => BoxY = Code Top Y - BoxHeight.
+                // X = CodeX + CodeWidth + 5.
+                const posRight = {
+                    x: item.x + item.width + 5,
+                    y: codeTopY - boxHeight,
+                    w: boxWidth,
+                    h: boxHeight,
+                    type: 'RIGHT'
+                };
 
+                // Position B: ABOVE
+                // X aligned with code X.
+                // Y (bottom of box) = Code Top Y + 2 (small gap)
+                // Wait, if Y is bottom-left, Y must be > Code Top Y.
+                const posAbove = {
+                    x: item.x,
+                    y: codeTopY + 2,
+                    w: boxWidth,
+                    h: boxHeight,
+                    type: 'ABOVE'
+                };
+
+                // Position C: BELOW
+                // X aligned with code X.
+                // Y (top of box) = Code Bottom Y (baseline item.y) - 2.
+                // BoxY = (item.y - 2) - BoxHeight.
+                const posBelow = {
+                    x: item.x,
+                    y: item.y - 2 - boxHeight,
+                    w: boxWidth,
+                    h: boxHeight,
+                    type: 'BELOW'
+                };
+
+                // 3. Check Collision
+                // Helper to check rect intersection
+                const hasCollision = (rect) => {
+                    // Filter obstacles on same page excluding THIS code itself
+                    const relevantObstacles = allObstacles.filter(o =>
+                        o.pageIndex === item.pageIndex &&
+                        // Ignore the code text itself (heuristic overlap check)
+                        !(Math.abs(o.x - item.x) < 5 && Math.abs(o.y - item.y) < 5)
+                    );
+
+                    for (const obs of relevantObstacles) {
+                        // Standard Rect Intersection
+                        // Rect 1: box {x, y, w, h} (y is bottom)
+                        // Rect 2: obs {x, y, width, height} (y is bottom)
+
+                        // Convert to Top/Bottom / Left/Right
+                        const r1 = { l: rect.x, r: rect.x + rect.w, b: rect.y, t: rect.y + rect.h };
+                        const r2 = { l: obs.x, r: obs.x + obs.width, b: obs.y, t: obs.y + obs.height };
+
+                        const noOverlap = r1.l > r2.r || r1.r < r2.l || r1.b > r2.t || r1.t < r2.b;
+                        if (!noOverlap) {
+                            // Collision found!
+                            // console.log(`Collision at ${rect.type} with "${obs.text}"`);
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                // Decision Strategy: Right -> Above -> Below (Default)
+                let selectedPos = posRight;
+
+                if (hasCollision(posRight)) {
+                    if (!hasCollision(posAbove)) {
+                        selectedPos = posAbove;
+                    } else {
+                        // If Above also fails, use Below (or Above if Below fails? User suggested Above then Below)
+                        // If both fail, maybe Below is safer or just force Above?
+                        // Let's stick to Below as fallback.
+                        selectedPos = posBelow;
+                    }
+                }
+
+                // 4. Draw
                 // Draw White Background Box
                 page.drawRectangle({
-                    x: boxX,
-                    y: boxY,
-                    width: boxWidth,
-                    height: boxHeight,
+                    x: selectedPos.x,
+                    y: selectedPos.y,
+                    width: selectedPos.w,
+                    height: selectedPos.h,
                     color: rgb(1, 1, 1), // White
                 });
 
-                // Draw list of prices
+                // Draw Text inside Box
+                // Box Y is Bottom-Left.
+                // We write text from Top-Down.
+                // First line Y (baseline).
+                // Box Top is selectedPos.y + selectedPos.h.
+                // StartY roughly BoxTop - padding - fontSize? 
+                // Or: StartY = BoxY + BoxHeight - Padding - (LineHeight? or slightly less for baseline)
+                // Let's align top line.
+                const startTextY = selectedPos.y + selectedPos.h - boxPadding - (lineHeight * 0.8);
+
                 priceList.forEach((p, idx) => {
                     const newValue = p.price * (1 + markupPercentage / 100);
                     const newPriceText = this.formatBrazilianPrice(newValue);
                     const labelText = p.label ? `${p.label} ` : '';
 
-                    const currentY = startY - (idx * lineHeight);
+                    const currentY = startTextY - (idx * lineHeight);
 
                     // Draw Label
                     if (p.label) {
                         page.drawText(labelText, {
-                            x: item.x + xOffset,
+                            x: selectedPos.x + boxPadding, // Left align inside box
                             y: currentY,
                             size: fontSize,
                             font: font,
-                            color: rgb(0.8, 0, 0), // RED
+                            color: rgb(0.8, 0, 0),
                         });
                     }
 
@@ -374,11 +441,11 @@ class CatalogMarkupService {
                     const labelWidth = p.label ? font.widthOfTextAtSize(labelText, fontSize) : 0;
 
                     page.drawText(newPriceText, {
-                        x: item.x + xOffset + labelWidth,
+                        x: selectedPos.x + boxPadding + labelWidth,
                         y: currentY,
                         size: fontSize,
                         font: font,
-                        color: rgb(0.8, 0, 0), // RED
+                        color: rgb(0.8, 0, 0),
                     });
                 });
 
