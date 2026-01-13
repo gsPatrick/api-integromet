@@ -66,7 +66,7 @@ app.post('/campaigns', campaignController.createCampaign);
 app.get('/campaigns', campaignController.listCampaigns);
 app.put('/campaigns/:id', campaignController.updateCampaign);
 app.delete('/campaigns/:id', campaignController.deleteCampaign);
-// New Campaign Catalog Routes
+// New Campaign Catalog Routes (Checked)
 app.post('/campaigns/:id/upload', pdfUpload.fields([
     { name: 'pdf', maxCount: 1 },
     { name: 'pricePdf', maxCount: 20 }
