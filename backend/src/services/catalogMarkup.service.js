@@ -271,6 +271,13 @@ class CatalogMarkupService {
         const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold); // For price
         const labelFont = await pdfDoc.embedFont(StandardFonts.Helvetica); // For label
 
+        // DEBUG: Print sample codes for comparison
+        const masterKeys = Array.from(masterPriceMap.keys()).slice(0, 20);
+        const visualSamples = codes.slice(0, 20).map(c => this.normalizeCode(c.text));
+
+        console.log('[DEBUG] Master Price Keys (Sample):', masterKeys);
+        console.log('[DEBUG] Visual Codes Normalized (Sample):', visualSamples);
+
         let successCount = 0;
 
         for (const item of codes) {
@@ -290,9 +297,35 @@ class CatalogMarkupService {
                 // Visual PDF has code baseline. Descriptions are below.
                 // We should start slightly higher to allow list to grow downwards without hitting description.
                 // Or grow Upwards? No, standard is list top-down.
-                // Let's shift start Y up by (lines - 1) * partial_height?
-                // Or simply start at y + 5 to clear baseline.
                 const startY = item.y + (priceList.length > 1 ? 5 : 0);
+
+                // Calculate dimensions for Background Box
+                const boxPadding = 2;
+                let maxLineWidth = 0;
+
+                // Pre-calc width
+                priceList.forEach(p => {
+                    const newValue = p.price * (1 + markupPercentage / 100);
+                    const newPriceText = this.formatBrazilianPrice(newValue);
+                    const labelText = p.label ? `${p.label} ` : '';
+                    const fullText = labelText + newPriceText;
+                    const width = font.widthOfTextAtSize(fullText, fontSize);
+                    if (width > maxLineWidth) maxLineWidth = width;
+                });
+
+                const boxWidth = maxLineWidth + (boxPadding * 2);
+                const boxHeight = (priceList.length * lineHeight) + (boxPadding * 2);
+                const boxX = item.x + xOffset - boxPadding;
+                const boxY = startY - ((priceList.length - 1) * lineHeight) - 2; // Bottom Y
+
+                // Draw White Background Box
+                page.drawRectangle({
+                    x: boxX,
+                    y: boxY,
+                    width: boxWidth,
+                    height: boxHeight,
+                    color: rgb(1, 1, 1), // White
+                });
 
                 // Draw list of prices
                 priceList.forEach((p, idx) => {
@@ -302,32 +335,26 @@ class CatalogMarkupService {
 
                     const currentY = startY - (idx * lineHeight);
 
-                    // Shift Y down to place BELOW the original text
-                    // PDF Y grows upwards, so subtract to go down.
-                    const shiftedY = currentY - 10;
-
-                    // Draw Label (Red & Bold)
+                    // Draw Label
                     if (p.label) {
                         page.drawText(labelText, {
                             x: item.x + xOffset,
-                            y: shiftedY,
+                            y: currentY,
                             size: fontSize,
                             font: font,
-                            color: rgb(0.8, 0, 0),
+                            color: rgb(0.8, 0, 0), // RED
                         });
                     }
 
-                    // Draw Price (Red) - Position after label
+                    // Draw Price
                     const labelWidth = p.label ? font.widthOfTextAtSize(labelText, fontSize) : 0;
-
-                    // Removed White Background Box per user request
 
                     page.drawText(newPriceText, {
                         x: item.x + xOffset + labelWidth,
-                        y: shiftedY,
+                        y: currentY,
                         size: fontSize,
                         font: font,
-                        color: rgb(0.8, 0, 0),
+                        color: rgb(0.8, 0, 0), // RED
                     });
                 });
 
