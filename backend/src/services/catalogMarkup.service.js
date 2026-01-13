@@ -290,17 +290,24 @@ class CatalogMarkupService {
                 if (!page) continue;
 
                 const fontSize = 11; // Increased from 10
-                const lineHeight = 11; // Compact spacing
-                const xOffset = item.width + 10; // Right of code
+                const lineHeight = 11;
+                // Move X: Align with code start (centering might be better, but left-align is safer)
+                // Actually, let's slightly center or just add small padding
+                const xOffset = 0;
 
-                // Adjust Start Y based on number of lines to center vertically or grow upwards?
-                // Visual PDF has code baseline. Descriptions are below.
-                // We should start slightly higher to allow list to grow downwards without hitting description.
-                // Or grow Upwards? No, standard is list top-down.
-                const startY = item.y + (priceList.length > 1 ? 5 : 0);
+                // Move Y: Position ABOVE code.
+                // We want the bottom-most price line to be comfortably above the code top.
+                // item.y is roughly baseline. item.height is ~10.
+                // So top of code is item.y + 10.
+                // We want bottom of price list at item.y + 15 (gap of 5).
+                // Formula: bottomLineY = startY - ( (n-1) * lineHeight )
+                // So: startY = targetBottomY + ( (n-1) * lineHeight )
+                // targetBottomY = item.y + 12;
+                const targetBottomY = item.y + 14;
+                const startY = targetBottomY + ((priceList.length - 1) * lineHeight);
 
                 // Calculate dimensions for Background Box
-                const boxPadding = 2;
+                const boxPadding = 3;
                 let maxLineWidth = 0;
 
                 // Pre-calc width
@@ -315,8 +322,25 @@ class CatalogMarkupService {
 
                 const boxWidth = maxLineWidth + (boxPadding * 2);
                 const boxHeight = (priceList.length * lineHeight) + (boxPadding * 2);
+
+                // Center Box relative to Text? Or Text relative to Box?
+                // Text starts at item.x. Box starts at item.x - padding.
                 const boxX = item.x + xOffset - boxPadding;
-                const boxY = startY - ((priceList.length - 1) * lineHeight) - 2; // Bottom Y
+
+                // Box Y (bottom-left)
+                // Top of box = startY + fontHeight?
+                // drawText Y is baseline.
+                // drawRectangle Y is bottom-left.
+                // Top line Y (baseline) is startY.
+                // Top of text is startY + fontSize (roughly).
+                // So Box Top should be startY + fontSize + padding.
+                // Box Bottom should be boxTop - boxHeight.
+                // Let's deduce Box Y directly from bottom line.
+                // Bottom line baseline = startY - ((n-1)*LH).
+                // Bottom of text (descender) is slightly below baseline. Say -2.
+                // So Box Bottom = BottomLineBaseline - 3 - padding.
+                const lastLineY = startY - ((priceList.length - 1) * lineHeight);
+                const boxY = lastLineY - 3 - boxPadding;
 
                 // Draw White Background Box
                 page.drawRectangle({
