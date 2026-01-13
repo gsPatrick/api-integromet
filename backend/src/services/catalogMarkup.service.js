@@ -302,11 +302,15 @@ class CatalogMarkupService {
 
                     const currentY = startY - (idx * lineHeight);
 
+                    // Shift Y down to place BELOW the original text
+                    // PDF Y grows upwards, so subtract to go down.
+                    const shiftedY = currentY - 10;
+
                     // Draw Label (Red & Bold)
                     if (p.label) {
                         page.drawText(labelText, {
                             x: item.x + xOffset,
-                            y: currentY,
+                            y: shiftedY,
                             size: fontSize,
                             font: font,
                             color: rgb(0.8, 0, 0),
@@ -316,33 +320,11 @@ class CatalogMarkupService {
                     // Draw Price (Red) - Position after label
                     const labelWidth = p.label ? font.widthOfTextAtSize(labelText, fontSize) : 0;
 
-                    // Background Box Calculation
-                    const priceWidth = font.widthOfTextAtSize(newPriceText, fontSize);
-                    const totalWidth = labelWidth + priceWidth;
-
-                    // Draw White Background Box to cover anything behind
-                    page.drawRectangle({
-                        x: item.x + xOffset - 2,
-                        y: currentY - 2,
-                        width: totalWidth + 4,
-                        height: fontSize + 4,
-                        color: rgb(1, 1, 1),
-                    });
-
-                    // Redraw Label (on top of white box)
-                    if (p.label) {
-                        page.drawText(labelText, {
-                            x: item.x + xOffset,
-                            y: currentY,
-                            size: fontSize,
-                            font: font,
-                            color: rgb(0.8, 0, 0),
-                        });
-                    }
+                    // Removed White Background Box per user request
 
                     page.drawText(newPriceText, {
                         x: item.x + xOffset + labelWidth,
-                        y: currentY,
+                        y: shiftedY,
                         size: fontSize,
                         font: font,
                         color: rgb(0.8, 0, 0),
