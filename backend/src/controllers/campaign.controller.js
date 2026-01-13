@@ -60,6 +60,7 @@ exports.updateCampaign = async (req, res) => {
 };
 
 const CatalogMarkupService = require('../services/catalogMarkup.service');
+const catalogAssistant = require('../services/catalogAssistant.service');
 const path = require('path');
 const fs = require('fs');
 
@@ -91,7 +92,30 @@ exports.uploadFiles = async (req, res) => {
         }
 
         await campaign.save();
-        return res.json(campaign);
+
+        // Sync with AI Assistant (Background or Await)
+        // We await to ensure valid status
+        try {
+            if (campaign.visualPdfPath && fs.existsSync(campaign.visualPdfPath)) {
+                const filename = path.basename(campaign.visualPdfPath);
+                console.log(`[CampaignController] Syncing Visual PDF to AI: ${filename}`);
+                await catalogAssistant.uploadCatalogPdf(campaign.visualPdfPath, filename);
+            }
+
+            if (campaign.pricePdfPaths && campaign.pricePdfPaths.length > 0) {
+                for (const pPath of campaign.pricePdfPaths) {
+                    if (fs.existsSync(pPath)) {
+                        const filename = path.basename(pPath);
+                        console.log(`[CampaignController] Syncing Price PDF to AI: ${filename}`);
+                        await catalogAssistant.uploadCatalogPdf(pPath, filename);
+                    }
+                }
+            }
+        } catch (aiError) {
+            console.error('[CampaignController] Warning: Failed to sync files with AI:', aiError.message);
+            // Don't fail the request, just log
+        }
+
 
     } catch (error) {
         console.error('Error uploading campaign files:', error);

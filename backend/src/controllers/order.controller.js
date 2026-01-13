@@ -13,7 +13,20 @@ class OrderController {
             const limit = parseInt(req.query.limit) || 20;
             const offset = (page - 1) * limit;
 
+            const Campaign = require('../models/Campaign');
+            const activeCampaign = await Campaign.findOne({ where: { isActive: true } });
+
+            if (!activeCampaign) {
+                return res.json({
+                    total: 0,
+                    pages: 0,
+                    currentPage: page,
+                    data: []
+                });
+            }
+
             const { count, rows } = await Order.findAndCountAll({
+                where: { campaignId: activeCampaign.id },
                 order: [['createdAt', 'DESC']],
                 limit: limit,
                 offset: offset

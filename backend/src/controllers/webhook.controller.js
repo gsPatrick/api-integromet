@@ -8,6 +8,7 @@ const blingService = require('../services/bling.service');
 const storageService = require('../services/storage.service');
 const CatalogController = require('./catalog.controller');
 const SettingsController = require('./settings.controller');
+const Campaign = require('../models/Campaign');
 const catalogAssistant = require('../services/catalogAssistant.service'); // Fallback
 
 class WebhookController {
@@ -154,8 +155,25 @@ class WebhookController {
 
         console.log(`[Webhook] Creating ${produtos.length} order(s)...`);
 
-        // Fetch markup setting
-        const markupPercentage = await SettingsController.getValue('markup_percentage', 35);
+        // Fetch Active Campaign & Settings
+        const activeCampaign = await Campaign.findOne({ where: { isActive: true } });
+
+        let markupPercentage = 35; // Default
+        let collectionName = '';
+        let campaignId = null;
+
+        if (activeCampaign) {
+            markupPercentage = activeCampaign.markupPercentage || 35;
+            collectionName = activeCampaign.name;
+            campaignId = activeCampaign.id;
+            console.log(`[Webhook] Using Active Campaign: "${activeCampaign.name}" (ID: ${campaignId}) | Markup: ${markupPercentage}%`);
+        } else {
+            // Fallback to Global Settings if no campaign active
+            markupPercentage = await SettingsController.getValue('markup_percentage', 35);
+            collectionName = await SettingsController.getValue('campaign_description', '');
+            console.log(`[Webhook] No Active Campaign. Using Global Settings. Markup: ${markupPercentage}%`);
+        }
+
         const markup = 1 + (Number(markupPercentage) / 100);
 
         const createdOrders = [];
@@ -167,8 +185,8 @@ class WebhookController {
             // Note: For text-only lists, AI might not extract code unless user typed it
             // We can improve this later with search by name
             if (!catalogPrice && produto.codigo) {
-                console.log(`[Webhook] No price. Looking up code ${produto.codigo} in catalog...`);
-                const catalogLookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
+                console.log(`[Webhook] No price. Looking up code ${produto.codigo} in catalog (Campaign ${campaignId})...`);
+                const catalogLookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, campaignId);
                 if (catalogLookup) {
                     catalogPrice = parseFloat(catalogLookup);
                     console.log(`[Webhook] Found price in catalog: R$${catalogPrice}`);
@@ -184,10 +202,10 @@ class WebhookController {
                 if (produto.codigo_cor) query += ` cor ${produto.codigo_cor}`;
                 if (produto.tamanho) query += ` tamanho ${produto.tamanho}`;
 
-                console.log(`[Webhook] Needs more info (Price/ColorCode). Asking Assistant about "${query}"...`);
+                console.log(`[Webhook] Needs more info (Price/ColorCode). Asking Assistant about "${query}" in context of "${collectionName}"...`);
 
                 try {
-                    const assistResult = await catalogAssistant.searchCatalog(query);
+                    const assistResult = await catalogAssistant.searchCatalog(query, collectionName);
                     if (assistResult.encontrado && assistResult.produtos && assistResult.produtos.length > 0) {
                         const bestMatch = assistResult.produtos[0];
 
@@ -233,7 +251,7 @@ class WebhookController {
 
             // Build product description
             // Format: 2000711 - Jaqueta Nylon (Tam: 2),(Cor: 0452 Off White) - Milon Inverno Jan 26
-            const collectionName = await SettingsController.getValue('campaign_description', '');
+            // collectionName is already resolved from Campaign or Settings above
             let productDescription = '';
 
             if (produto.codigo) {
@@ -268,9 +286,9 @@ class WebhookController {
                 extractedColorCode: produto.codigo_cor,
                 catalogPrice: catalogPrice,
                 sellPrice: sellPrice,
-                imageUrl: targetImageUrl, // Can be null for text-only orders
                 quantity: produto.quantidade || 1,
                 originalMessage: userText,
+                campaignId: campaignId,
                 status: 'PENDING'
             });
 

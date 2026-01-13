@@ -11,6 +11,15 @@ const CatalogProduct = sequelize.define('CatalogProduct', {
         autoIncrement: true,
         primaryKey: true
     },
+    campaignId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'campaigns',
+            key: 'id'
+        },
+        onDelete: 'CASCADE'
+    },
     code: {
         type: DataTypes.STRING,
         allowNull: false,

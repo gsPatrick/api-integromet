@@ -130,19 +130,22 @@ class CatalogAssistantService {
     /**
      * Queries the catalog for a product price/code
      */
-    async searchCatalog(query) {
+    async searchCatalog(query, context = '') {
         await this.initialize();
-        console.log('[CatalogAssistant] Searching catalog for:', query);
+        console.log('[CatalogAssistant] Searching catalog for:', query, '| Context:', context);
+
+        const prompt = `Busque nos catálogos PDF e encontre informações sobre: "${query}".
+                    ${context ? `CONTEXTO DA CAMPANHA: "${context}". Dê prioridade a produtos encontrados em arquivos que correspondam a este nome ou coleção.` : ''}
+                    
+                    IMPORTANTE:
+                    - Busque por código, nome, descrição ou qualquer parte que coincida`;
 
         // Create a thread
         const thread = await this.openai.beta.threads.create({
             messages: [
                 {
                     role: "user",
-                    content: `Busque nos catálogos PDF e encontre informações sobre: "${query}".
-                    
-                    IMPORTANTE:
-                    - Busque por código, nome, descrição ou qualquer parte que coincida
+                    content: prompt + `
                     - Se encontrar algo parecido, retorne mesmo que não seja exato
                     - Procure em TODOS os catálogos disponíveis
                     - Se houver variação por tamanho, inclua todos os preços

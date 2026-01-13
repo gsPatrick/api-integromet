@@ -258,13 +258,21 @@ class CatalogController {
     /**
      * Static helper to find product price by code
      */
-    async getProductPrice(code, size = null) {
+    async getProductPrice(code, size = null, campaignId = null) {
         try {
+            const where = {
+                code: { [Op.like]: `%${code}%` },
+                isActive: true
+            };
+
+            if (campaignId) {
+                where.campaignId = campaignId;
+            }
+
             const product = await CatalogProduct.findOne({
-                where: {
-                    code: { [Op.like]: `%${code}%` },
-                    isActive: true
-                }
+                where: where,
+                // If multiple matches (duplicates), prefer the one created most recently
+                order: [['createdAt', 'DESC']]
             });
 
             if (!product) return null;
