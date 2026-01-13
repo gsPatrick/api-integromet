@@ -70,6 +70,16 @@ const Order = sequelize.define('Order', {
         allowNull: true,
         comment: 'ID da cobrança no Asaas (pay_...)'
     },
+    campaignId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'campaigns', // name of Target model
+            key: 'id', // key in Target model that we're referencing
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+    },
     blingId: {
         type: DataTypes.INTEGER,
         allowNull: true,

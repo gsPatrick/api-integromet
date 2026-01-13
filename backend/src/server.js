@@ -55,9 +55,23 @@ app.get('/setup/bling', blingController.handleSetup);
 app.get('/settings', settingsController.getAll);
 app.put('/settings', settingsController.update);
 // Customer Routes
+// Customer Routes
 app.get('/customers', CustomerController.listCustomers);
 app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
 app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
+
+// Campaign Routes
+const campaignController = require('./controllers/campaign.controller');
+app.post('/campaigns', campaignController.createCampaign);
+app.get('/campaigns', campaignController.listCampaigns);
+app.put('/campaigns/:id', campaignController.updateCampaign);
+app.delete('/campaigns/:id', campaignController.deleteCampaign);
+// New Campaign Catalog Routes
+app.post('/campaigns/:id/upload', pdfUpload.fields([
+    { name: 'pdf', maxCount: 1 },
+    { name: 'pricePdf', maxCount: 20 }
+]), campaignController.uploadFiles);
+app.post('/campaigns/:id/generate', campaignController.generateCatalog);
 
 // Catalog Routes
 const catalogController = require('./controllers/catalog.controller');
@@ -120,11 +134,14 @@ async function startServer() {
         // Attach sequelize to app for easier access if needed, though it's already imported
         app.sequelize = sequelize;
 
-        app.sequelize.sync({ alter: true }).then(() => {
+        app.sequelize.sync({ alter: true }).then(async () => {
             console.log('Database synced (ALTER mode - Data preserved)');
 
             // Seed Default Admin User
             const User = require('./models/User'); // Ensure User model is loaded
+            const Campaign = require('./models/Campaign');
+            const Order = require('./models/Order');
+
             const defaultUser = 'dpbrinquedoscriativos@gmail.com';
             User.findOne({ where: { username: defaultUser } }).then(admin => {
                 if (!admin) {
@@ -132,6 +149,49 @@ async function startServer() {
                     console.log(`[Server] Default user (${defaultUser}) created automatically.`);
                 }
             });
+
+            // -------------------------------------------------------------
+            // CAMPAIGN MIGRATION: Ensure a Default Campaign exists and claims old orders
+            // -------------------------------------------------------------
+            try {
+                // 1. Check if ANY campaign exists
+                const count = await Campaign.count();
+                let defaultCampaignId;
+
+                if (count === 0) {
+                    // Create Default Campaign
+                    const defaultCamp = await Campaign.create({
+                        name: 'Campanha Padrão (Legado)',
+                        isActive: true,
+                        description: 'Campanha automática para pedidos anteriores.'
+                    });
+                    defaultCampaignId = defaultCamp.id;
+                    console.log(`[Server] Created Default Campaign (ID: ${defaultCampaignId})`);
+                } else {
+                    // Use the first one found (or a specific "Default" if we tracked it)
+                    // For now, just finding the first ID to rescue orphans is safe enough,
+                    // or finding one explicitly named 'Campanha Padrão'.
+                    const existing = await Campaign.findOne({ order: [['id', 'ASC']] });
+                    if (existing) defaultCampaignId = existing.id;
+                }
+
+                if (defaultCampaignId) {
+                    // 2. Update NULL orders
+                    const { Op } = require('sequelize');
+                    const [updatedCount] = await Order.update(
+                        { campaignId: defaultCampaignId },
+                        { where: { campaignId: null } }
+                    );
+
+                    if (updatedCount > 0) {
+                        console.log(`[Server] Migrated ${updatedCount} orphan orders to Campaign ID ${defaultCampaignId}`);
+                    }
+                }
+            } catch (err) {
+                console.error('[Server] Campaign migration failed:', err);
+                // Non-fatal, continue starting server
+            }
+            // -------------------------------------------------------------
 
             // app.listen... moved below
             app.listen(PORT, () => {
