@@ -4,12 +4,16 @@ exports.createCampaign = async (req, res) => {
     try {
         const { name, startDate, endDate, isActive } = req.body;
 
-        // If the new campaign is set to ACTIVE, deactivate all others first
-        if (isActive) {
-            await Campaign.update({ isActive: false }, { where: {} });
-        }
+        // If the new campaign is set to ACTIVE, we NO LONGER deactivate all others.
+        // Multiple campaigns can be active simultaneously (overlapping groups).
 
-        const campaign = await Campaign.create({ name, startDate, endDate, isActive });
+        const campaign = await Campaign.create({
+            name,
+            startDate,
+            endDate,
+            isActive,
+            targetGroups: req.body.targetGroups || []
+        });
         return res.status(201).json(campaign);
     } catch (error) {
         console.error('Error creating campaign:', error);
@@ -37,18 +41,16 @@ exports.updateCampaign = async (req, res) => {
             return res.status(404).json({ error: 'Campaign not found' });
         }
 
-        // If activating THIS campaign, deactivate ALL others first
-        // Note: checking strict equality to true to avoid undefined issues
-        if (isActive === true) {
-            await Campaign.update({ isActive: false }, { where: {} }); // Sets all to false
-            // Then we set this one to true below
-        }
+        // If activating THIS campaign, we now ALLOW overlap.
+        // No need to deactivate others.
+
 
         // Apply updates
         if (name !== undefined) campaign.name = name;
         if (isActive !== undefined) campaign.isActive = isActive;
         if (startDate !== undefined) campaign.startDate = startDate;
         if (endDate !== undefined) campaign.endDate = endDate;
+        if (req.body.targetGroups !== undefined) campaign.targetGroups = req.body.targetGroups;
 
         await campaign.save();
         return res.json(campaign);

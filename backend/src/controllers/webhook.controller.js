@@ -155,23 +155,42 @@ class WebhookController {
 
         console.log(`[Webhook] Creating ${produtos.length} order(s)...`);
 
-        // Fetch Active Campaign & Settings
-        const activeCampaign = await Campaign.findOne({ where: { isActive: true } });
+        // ---------------------------------------------------------
+        // 5. RESOLVE CAMPAIGN & CONTEXT
+        // ---------------------------------------------------------
+        const chatTargetId = payload.chatId || payload.phone;
+        const candidates = await this._getActiveCampaigns(chatTargetId);
 
-        let markupPercentage = 35; // Default
-        let collectionName = '';
+        // Strategy: Default to the most recently created candidate for "General Context"
+        // But for each product, we might try to be more specific if possible.
+        // For now, we'll use the Primary Candidate (index 0, sorted by ID DESC) for Markup/Collection Name
+
+        let primaryCampaign = null;
         let campaignId = null;
+        let markupPercentage = 35;
+        let collectionName = '';
 
-        if (activeCampaign) {
-            markupPercentage = activeCampaign.markupPercentage || 35;
-            collectionName = activeCampaign.name;
-            campaignId = activeCampaign.id;
-            console.log(`[Webhook] Using Active Campaign: "${activeCampaign.name}" (ID: ${campaignId}) | Markup: ${markupPercentage}%`);
+        if (candidates.length > 0) {
+            primaryCampaign = candidates[0]; // Most recent
+            campaignId = primaryCampaign.id;
+            markupPercentage = primaryCampaign.markupPercentage || 35;
+            collectionName = primaryCampaign.name;
+
+            if (candidates.length > 1) {
+                console.log(`[Webhook] ⚠️ Multiple Active Campaigns found for ${chatTargetId}: [${candidates.map(c => c.name).join(', ')}]`);
+                console.log(`[Webhook] defaulting to "${primaryCampaign.name}" (ID: ${primaryCampaign.id}) for markup/context.`);
+
+                // Enhance Collection Name to include all candidates for AI Context
+                // e.g., "Campanha A ou Campanha B"
+                collectionName = candidates.map(c => c.name).join(' ou ');
+            } else {
+                console.log(`[Webhook] Active Campaign: "${primaryCampaign.name}" (ID: ${primaryCampaign.id})`);
+            }
         } else {
-            // Fallback to Global Settings if no campaign active
+            // Fallback to Global Settings
             markupPercentage = await SettingsController.getValue('markup_percentage', 35);
             collectionName = await SettingsController.getValue('campaign_description', '');
-            console.log(`[Webhook] No Active Campaign. Using Global Settings. Markup: ${markupPercentage}%`);
+            console.log(`[Webhook] No Active Campaign for ${chatTargetId}. Using Global Settings.`);
         }
 
         const markup = 1 + (Number(markupPercentage) / 100);
@@ -185,11 +204,27 @@ class WebhookController {
             // Note: For text-only lists, AI might not extract code unless user typed it
             // We can improve this later with search by name
             if (!catalogPrice && produto.codigo) {
-                console.log(`[Webhook] No price. Looking up code ${produto.codigo} in catalog (Campaign ${campaignId})...`);
-                const catalogLookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, campaignId);
-                if (catalogLookup) {
-                    catalogPrice = parseFloat(catalogLookup);
-                    console.log(`[Webhook] Found price in catalog: R$${catalogPrice}`);
+                // If we have candidates, try to find strictly in their catalogs first
+                // If multiple candidates, we iterate? Or just pass "null" campaignId to search ALL?
+                // Ideally search specifically.
+
+                if (candidates.length > 0) {
+                    for (const cand of candidates) {
+                        console.log(`[Webhook] Looking up code ${produto.codigo} in Campaign "${cand.name}" (ID: ${cand.id})...`);
+                        const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, cand.id);
+                        if (lookup) {
+                            catalogPrice = parseFloat(lookup);
+                            campaignId = cand.id; // Correctly assign order to THIS campaign
+                            markupPercentage = cand.markupPercentage || 35; // Update markup to match this campaign
+                            console.log(`[Webhook] Found in Campaign "${cand.name}"! Price: R$${catalogPrice}`);
+                            break; // Stop looking
+                        }
+                    }
+                } else {
+                    // Global lookup
+                    console.log(`[Webhook] Looking up code ${produto.codigo} globally...`);
+                    const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
+                    if (lookup) catalogPrice = parseFloat(lookup);
                 }
             }
 
@@ -245,7 +280,9 @@ class WebhookController {
 
             let sellPrice = null;
             if (catalogPrice) {
-                sellPrice = catalogPrice * markup;
+                // Re-calculate markup in case it changed due to campaign switching above
+                const finalMarkup = 1 + (Number(markupPercentage) / 100);
+                sellPrice = catalogPrice * finalMarkup;
                 sellPrice = Math.round(sellPrice * 100) / 100;
             }
 
@@ -417,6 +454,39 @@ class WebhookController {
             res.status(500).json({ error: 'Internal error' });
         }
     }
+    /**
+     * Helper to find active campaigns for a specific chat ID (Group or Private)
+     */
+    async _getActiveCampaigns(targetId) {
+        try {
+            const allActive = await Campaign.findAll({
+                where: { isActive: true },
+                order: [['id', 'DESC']] // Most recent first
+            });
+
+            // Filter in memory because targetGroups is JSON
+            const matched = allActive.filter(c => {
+                const groups = c.targetGroups;
+
+                // If targetGroups is null/empty, we treat it as Global/All ?? 
+                // Or maybe strictly for no-group? 
+                // User requirement: "escolher o grupo". If none selected, assume Global?
+                // Let's assume: If groups is empty, it applies to ALL (Global fallback).
+                // OR: If user didn't select groups, maybe it's legacy/global.
+
+                if (!groups || !Array.isArray(groups) || groups.length === 0) return true;
+
+                return groups.includes(targetId);
+            });
+
+            return matched;
+
+        } catch (error) {
+            console.error('[Webhook] Error getting active campaigns:', error);
+            return [];
+        }
+    }
+
 }
 
 module.exports = new WebhookController();

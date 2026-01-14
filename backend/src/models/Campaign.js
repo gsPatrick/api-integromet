@@ -27,6 +27,11 @@ const Campaign = sequelize.define('Campaign', {
         type: DataTypes.DATEONLY,
         allowNull: true
     },
+    targetGroups: {
+        type: DataTypes.JSON, // Array of group IDs: ["12...-group", "12...-group"]
+        defaultValue: [],
+        allowNull: false
+    },
     // Catalog Integration Fields
     markupPercentage: {
         type: DataTypes.FLOAT,
