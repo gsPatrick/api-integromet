@@ -137,6 +137,133 @@ class PdfParserAIService {
         });
         return map;
     }
+
+    /**
+     * Extract prices directly from PDF images using GPT-4o Vision
+     * Returns array of { value: number, x: number, y: number, width: number, pageIndex: number }
+     */
+    async extractPricesFromImagePdf(pdfBuffer, pageWidth, pageHeight) {
+        console.log('[PdfParserAI] Using GPT-4o Vision for image-based PDF...');
+
+        const sharp = require('sharp');
+        const { fromBuffer } = require('pdf2pic');
+
+        // Configure pdf2pic
+        const options = {
+            density: 150, // DPI - higher = better quality but more tokens
+            savePath: '/tmp',
+            format: 'png',
+            width: 1200,
+            height: 1700
+        };
+
+        const converter = fromBuffer(pdfBuffer, options);
+
+        // Get page count
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        const uint8Array = new Uint8Array(pdfBuffer);
+        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const doc = await loadingTask.promise;
+        const totalPages = doc.numPages;
+
+        let allPrices = [];
+
+        // Process pages (limit to avoid huge API costs)
+        const maxPages = Math.min(totalPages, 10);
+
+        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+            console.log(`[PdfParserAI] Analyzing page ${pageNum}/${totalPages} with Vision...`);
+
+            try {
+                // Convert page to image
+                const result = await converter(pageNum);
+                const imageBuffer = await sharp(result.path).toBuffer();
+                const base64Image = imageBuffer.toString('base64');
+
+                // Call GPT-4o Vision
+                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, pageWidth, pageHeight);
+                allPrices.push(...prices);
+
+                // Clean up temp file
+                const fs = require('fs');
+                if (fs.existsSync(result.path)) fs.unlinkSync(result.path);
+
+            } catch (error) {
+                console.error(`[PdfParserAI] Vision error on page ${pageNum}:`, error.message);
+            }
+        }
+
+        console.log(`[PdfParserAI] Vision extracted ${allPrices.length} prices total`);
+        return allPrices;
+    }
+
+    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
+        const prompt = `Analise esta imagem de uma página de catálogo de produtos.
+
+TAREFA: Encontre TODOS os valores monetários (preços) visíveis na imagem.
+
+RETORNE UM JSON com este formato:
+[
+  {
+    "originalValue": "45,90",
+    "numericValue": 45.90,
+    "approximateX": 0.25,
+    "approximateY": 0.35
+  }
+]
+
+REGRAS:
+1. originalValue: O texto exato como aparece (ex: "R$ 45,90" ou "45,90")
+2. numericValue: O valor como número (ponto para decimais)
+3. approximateX: Posição horizontal aproximada (0.0 = esquerda, 1.0 = direita)
+4. approximateY: Posição vertical aproximada (0.0 = topo, 1.0 = base)
+5. INCLUA todos os preços visíveis, mesmo pequenos
+6. Se não houver preços, retorne []
+7. Retorne APENAS o JSON, sem explicações`;
+
+        const response = await this.openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: prompt },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:image/png;base64,${base64Image}`,
+                                detail: "high"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens: 2000,
+            temperature: 0.1
+        });
+
+        const content = response.choices[0].message.content;
+        const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        try {
+            const parsed = JSON.parse(cleanContent);
+
+            // Convert relative positions to absolute PDF coordinates
+            return parsed.map(p => ({
+                text: p.originalValue,
+                value: p.numericValue,
+                x: p.approximateX * pageWidth,
+                y: pageHeight - (p.approximateY * pageHeight), // PDF Y is from bottom
+                width: String(p.originalValue).length * 8,
+                height: 12,
+                pageIndex: pageIndex
+            }));
+        } catch (e) {
+            console.error('[PdfParserAI] Failed to parse Vision response:', e.message);
+            return [];
+        }
+    }
 }
 
 module.exports = new PdfParserAIService();
+
