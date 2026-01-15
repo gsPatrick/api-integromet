@@ -1,5 +1,6 @@
 const sequelize = require('../config/database');
 const Setting = require('../models/Setting');
+const Campaign = require('../models/Campaign');
 
 async function initSettings() {
     try {
@@ -37,6 +38,25 @@ async function initSettings() {
             description: 'Sufixo para descrição dos produtos (ex: coleção/campanha)'
         });
 
+        // Create default "Pronta Entrega" campaign if it doesn't exist
+        const [defaultCampaign, created] = await Campaign.findOrCreate({
+            where: { isDefault: true },
+            defaults: {
+                name: 'Pronta Entrega',
+                description: 'Campanha padrão para pedidos que não pertencem a nenhuma campanha ativa',
+                isActive: true,
+                isDefault: true,
+                markupPercentage: 35,
+                targetGroups: [] // Global - applies to all groups
+            }
+        });
+
+        if (created) {
+            console.log('✅ Default "Pronta Entrega" campaign created (ID:', defaultCampaign.id, ')');
+        } else {
+            console.log('ℹ️ Default "Pronta Entrega" campaign already exists (ID:', defaultCampaign.id, ')');
+        }
+
         console.log('Settings initialized.');
         process.exit(0);
     } catch (error) {
@@ -46,3 +66,4 @@ async function initSettings() {
 }
 
 initSettings();
+

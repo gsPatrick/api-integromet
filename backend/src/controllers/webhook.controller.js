@@ -187,10 +187,23 @@ class WebhookController {
                 console.log(`[Webhook] Active Campaign: "${primaryCampaign.name}" (ID: ${primaryCampaign.id})`);
             }
         } else {
-            // Fallback to Global Settings
-            markupPercentage = await SettingsController.getValue('markup_percentage', 35);
-            collectionName = await SettingsController.getValue('campaign_description', '');
-            console.log(`[Webhook] No Active Campaign for ${chatTargetId}. Using Global Settings.`);
+            // No matching active campaign - try to find default "Pronta Entrega" campaign
+            console.log(`[Webhook] No Active Campaign for ${chatTargetId}. Looking for default campaign...`);
+
+            const defaultCampaign = await Campaign.findOne({ where: { isDefault: true } });
+
+            if (defaultCampaign) {
+                primaryCampaign = defaultCampaign;
+                campaignId = defaultCampaign.id;
+                markupPercentage = defaultCampaign.markupPercentage || 35;
+                collectionName = defaultCampaign.name;
+                console.log(`[Webhook] Using default campaign: "${defaultCampaign.name}" (ID: ${defaultCampaign.id})`);
+            } else {
+                // Final fallback to Global Settings
+                markupPercentage = await SettingsController.getValue('markup_percentage', 35);
+                collectionName = await SettingsController.getValue('campaign_description', '');
+                console.log(`[Webhook] No default campaign found. Using Global Settings.`);
+            }
         }
 
         const markup = 1 + (Number(markupPercentage) / 100);

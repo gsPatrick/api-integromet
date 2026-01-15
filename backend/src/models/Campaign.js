@@ -55,6 +55,11 @@ const Campaign = sequelize.define('Campaign', {
     finalPdfPath: {
         type: DataTypes.STRING, // Path to generated/final PDF
         allowNull: true
+    },
+    isDefault: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        comment: 'True for the default "Pronta Entrega" campaign that catches orders without active campaigns'
     }
 }, {
     tableName: 'campaigns',
