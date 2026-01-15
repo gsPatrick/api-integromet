@@ -233,26 +233,33 @@ class CatalogMarkupService {
             const newPriceText = this.formatBrazilianPrice(newValue);
 
             // Tunning Font Size:
-            // reduce multiplier from 0.75 to 0.5 to behave better with large boxes
+            // Use 50% of the original box height as font size foundation
             let fontSize = priceInfo.height * 0.5;
-            if (fontSize < 8) fontSize = 8; // min size
-            if (fontSize > 40) fontSize = 40; // max safety cap (prevent absurdly huge text)
+            if (fontSize < 12) fontSize = 12; // Increased min size for better visibility
+            if (fontSize > 40) fontSize = 40;
 
-            // Measure text width to ensure white box covers it
+            // Measure new text dimensions
             const textWidth = font.widthOfTextAtSize(newPriceText, fontSize);
-
-            // Box dimensions based on NEW TEXT + Padding - ignore huge boxes
             const textHeight = font.heightAtSize(fontSize);
-            const boxWidth = textWidth + 10;
-            const boxHeight = textHeight + 8;
 
-            // Calculate Anchors
+            // Box dimensions:
+            // Width: Adapt to text width (prevent overflow)
+            // Height: Use the NEW text height + padding. 
+            // We rely on Bottom Anchoring to ensure we cover the price and not the header.
+            const boxWidth = Math.max(textWidth + 12, priceInfo.width);
+            const boxHeight = textHeight + 10;
+
+            // Anchoring Strategy: BOTTOM-CENTER
+            // We assume the price is at the bottom of the detected block (ignoring labels above).
+            // This fixes the issue of "covering the header" (diamonds) while ensuring we cover the price at the bottom.
+
             const originalCenterX = priceInfo.x + (priceInfo.width / 2);
-            const originalCenterY = priceInfo.y + (priceInfo.height / 2);
 
-            // Calculate Position for NEW Box (Centered on Original)
+            // White Rectangle Position (Bottom Ancor)
+            // Rect X centered on original X
             const rectX = originalCenterX - (boxWidth / 2);
-            const rectY = originalCenterY - (boxHeight / 2);
+            // Rect Y anchored to original Bottom Y
+            const rectY = priceInfo.y - 2; // slight variance buffer
 
             // Draw White Background
             page.drawRectangle({
@@ -263,14 +270,15 @@ class CatalogMarkupService {
                 color: rgb(1, 1, 1),
             });
 
-            // Draw Text centered in the white box
+            // Draw Text Position (Bottom Ancor)
+            // Center X
             const textX = originalCenterX - (textWidth / 2);
-            // Baseline adjustment for centering
-            const textBaselineY = originalCenterY - (fontSize / 3.5);
+            // Bottom Y + padding
+            const textY = rectY + 6; // Lift text slightly from bottom edge
 
             page.drawText(newPriceText, {
                 x: textX,
-                y: textBaselineY,
+                y: textY,
                 size: fontSize,
                 font: font,
                 color: rgb(0.8, 0, 0),

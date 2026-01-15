@@ -169,7 +169,8 @@ class PdfParserAIService {
         let allPrices = [];
 
         // Process pages (limit to avoid huge API costs)
-        const maxPages = Math.min(totalPages, 10);
+        // Increased from 10 to 50 to handle full catalogs
+        const maxPages = Math.min(totalPages, 50);
 
         for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
             console.log(`[PdfParserAI] Analyzing page ${pageNum}/${totalPages} with Vision...`);
