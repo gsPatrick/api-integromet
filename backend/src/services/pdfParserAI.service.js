@@ -149,12 +149,11 @@ class PdfParserAIService {
         const { fromBuffer } = require('pdf2pic');
 
         // Configure pdf2pic
+        // Configure pdf2pic
         const options = {
             density: 150, // DPI - higher = better quality but more tokens
             savePath: '/tmp',
-            format: 'png',
-            width: 1200,
-            height: 1700
+            format: 'png'
         };
 
         const converter = fromBuffer(pdfBuffer, options);
