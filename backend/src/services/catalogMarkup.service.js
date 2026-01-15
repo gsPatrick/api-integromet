@@ -241,38 +241,36 @@ class CatalogMarkupService {
             // Measure text width to ensure white box covers it
             const textWidth = font.widthOfTextAtSize(newPriceText, fontSize);
 
-            // Box dimensions
-            // Use the wider of: original box width OR new text width (plus padding)
-            const boxWidth = Math.max(priceInfo.width, textWidth + 8);
-            const boxHeight = priceInfo.height;
+            // Box dimensions based on NEW TEXT + Padding - ignore huge boxes
+            const textHeight = font.heightAtSize(fontSize);
+            const boxWidth = textWidth + 10;
+            const boxHeight = textHeight + 8;
 
-            // Center the new box relative to the original center
-            // Original Center X = priceInfo.x + (priceInfo.width / 2)
-            // New Start X = Original Center X - (boxWidth / 2)
+            // Calculate Anchors
             const originalCenterX = priceInfo.x + (priceInfo.width / 2);
-            const newX = originalCenterX - (boxWidth / 2);
+            const originalCenterY = priceInfo.y + (priceInfo.height / 2);
 
-            // Centering Y is tricky because PDF coordinates are bottom-up
-            // We'll trust the priceInfo.y as the bottom anchor but adjust slightly
-            const textY = priceInfo.y + (boxHeight * 0.2); // lift text slightly
+            // Calculate Position for NEW Box (Centered on Original)
+            const rectX = originalCenterX - (boxWidth / 2);
+            const rectY = originalCenterY - (boxHeight / 2);
 
             // Draw White Background
             page.drawRectangle({
-                x: newX - 2,
-                y: priceInfo.y - 2,
-                width: boxWidth + 4,
-                height: boxHeight + 4, // slightly taller
+                x: rectX,
+                y: rectY,
+                width: boxWidth,
+                height: boxHeight,
                 color: rgb(1, 1, 1),
             });
 
             // Draw Text centered in the white box
-            // actually we can just use newX + padding if we calculated newX for changes
-            // But let's center text in the calculated boxWidth
-            const textX = newX + (boxWidth - textWidth) / 2;
+            const textX = originalCenterX - (textWidth / 2);
+            // Baseline adjustment for centering
+            const textBaselineY = originalCenterY - (fontSize / 3.5);
 
             page.drawText(newPriceText, {
                 x: textX,
-                y: textY,
+                y: textBaselineY,
                 size: fontSize,
                 font: font,
                 color: rgb(0.8, 0, 0),
