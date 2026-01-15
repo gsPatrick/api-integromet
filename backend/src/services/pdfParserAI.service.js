@@ -199,39 +199,32 @@ class PdfParserAIService {
     }
 
     async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
-        const prompt = `Você é um motor de OCR (Reconhecimento Óptico de Caracteres) especializado em dados estruturados.
-Sua única função é transcrever valores numéricos visíveis.
+        const systemPrompt = `You are a specialized OCR engine for structured data extraction.
+Your ONLY function is to identify and transcribe numerical price values from images.
+IGNORE all background images, people, watermarks, or artistic elements.
+Do not interpret the image context. Focus 100% on the text overlay.
 
-TAREFA: Extraia as coordenadas e valores de preços (formato R$ XX,XX) desta imagem de catálogo público.
-Não analise o conteúdo editorial, apenas extraia os dados numéricos dos preços.
+Output MUST be a raw JSON array. No markdown, no explanations.`;
 
-RETORNE UM JSON APENAS com este formato:
-[
-  {
-    "originalValue": "R$ 45,90",
-    "numericValue": 45.90,
-    "box": {
-        "top": 0.15,
-        "left": 0.50,
-        "width": 0.10,
-        "height": 0.05
-    }
-  }
-]
+        const userPrompt = `Extract all price values (e.g. "R$ 341,60", "387", "45,90") from this image.
+Return a JSON array where each object contains:
+- "originalValue": The exact text string.
+- "numericValue": The parsed number.
+- "box": The strict bounding box {top, left, width, height} (0.0-1.0 scale) covering the price text.
 
-REGRAS:
-1. Extraia o bounding box ("box") visual exato que contem o preço.
-2. Se não houver preços, retorne array vazio: [].
-3. NÃO explique nada. NÃO peça desculpas. NÃO converse. APENAS JSON.
-`;
+If no prices are found, return [].`;
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 {
+                    role: "system",
+                    content: systemPrompt
+                },
+                {
                     role: "user",
                     content: [
-                        { type: "text", text: prompt },
+                        { type: "text", text: userPrompt },
                         {
                             type: "image_url",
                             image_url: {
