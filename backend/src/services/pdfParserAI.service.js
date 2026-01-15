@@ -221,10 +221,18 @@ class PdfParserAIService {
     async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
         const systemPrompt = `You are a specialized OCR engine for structured data extraction.
 Your ONLY function is to identify and transcribe numerical price values from images.
-IGNORE all background images, people, watermarks, or artistic elements.
-Do not interpret the image context. Focus 100% on the text overlay.
 
-Output MUST be a raw JSON array. No markdown, no explanations.`;
+CRITICAL RULES:
+1. Distinguish PRICES from SIZES.
+   - Prices are often the largest numbers, usually at the bottom.
+   - SIZES are often small numbers (2, 4, 6, 8, 10, P, M, G) in sequences or inside geometric shapes (diamonds, circles).
+   - IGNORE SIZES. DO NOT extract them. DO NOT return their bounding boxes.
+2. Your Bounding Box MUST match the PRICE text exactly.
+   - Do not point to the sizes while returning the price value.
+   - If the price is "427", the box must cover "427", NOT the sizes above it.
+3. IGNORE background images, people, watermarks. Focus 100% on the price text overlay.
+
+Output MUST be a raw JSON array. No markdown.`;
 
         const userPrompt = `Extract all price values (e.g. "R$ 341,60", "387", "45,90") from this image.
 Return a JSON array where each object contains:
