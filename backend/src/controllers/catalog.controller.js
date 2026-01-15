@@ -323,7 +323,7 @@ class CatalogController {
                 return res.status(400).json({ error: 'Nome do catálogo é obrigatório' });
             }
 
-            if (markupPercentage === undefined || markupPercentage < 0) {
+            if (markupPercentage === undefined) {
                 return res.status(400).json({ error: 'Porcentagem de markup inválida' });
             }
 
