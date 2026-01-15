@@ -422,25 +422,30 @@ class CatalogController {
                 pricePdfPaths
             );
 
-            // Return the file for download
-            res.download(result.outputPath, result.outputFilename, (err) => {
-                if (err) {
-                    console.error('[CatalogController] Error sending file:', err);
+            // Clean up uploaded files immediately after generation (not the output!)
+            try {
+                if (isUploaded && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+                if (pricePdfPaths.length > 0) {
+                    pricePdfPaths.forEach(p => {
+                        if (fs.existsSync(p)) fs.unlinkSync(p);
+                    });
                 }
-                // Clean up the uploaded files after processing
-                try {
-                    // Only delete Visual PDF if it was uploaded for this request
-                    if (isUploaded && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+            } catch (e) {
+                console.warn('[CatalogController] Could not delete uploaded files:', e.message);
+            }
 
-                    // Always delete uploaded Price PDFs (they are transient in this context)
-                    if (pricePdfPaths.length > 0) {
-                        pricePdfPaths.forEach(p => {
-                            if (fs.existsSync(p)) fs.unlinkSync(p);
-                        });
-                    }
-                } catch (e) {
-                    console.warn('[CatalogController] Could not delete uploaded files:', e.message);
-                }
+            // Return download URL instead of streaming (avoids proxy timeout issues)
+            // The file is in: /workspace/public/uploads/catalogs/markup/filename.pdf
+            // Public URL will be: /uploads/catalogs/markup/filename.pdf
+            const downloadUrl = `/uploads/catalogs/markup/${result.outputFilename}`;
+
+            console.log(`[CatalogController] PDF generated successfully. Download URL: ${downloadUrl}`);
+
+            res.json({
+                success: true,
+                downloadUrl: downloadUrl,
+                filename: result.outputFilename,
+                pricesUpdated: result.pricesUpdated
             });
 
         } catch (error) {
