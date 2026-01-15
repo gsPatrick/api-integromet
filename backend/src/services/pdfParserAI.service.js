@@ -176,13 +176,19 @@ class PdfParserAIService {
             console.log(`[PdfParserAI] Analyzing page ${pageNum}/${totalPages} with Vision...`);
 
             try {
+                // Get Specific Page Dimensions
+                const page = await doc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 1 });
+                const specificPageWidth = viewport.width;
+                const specificPageHeight = viewport.height;
+
                 // Convert page to image
                 const result = await converter(pageNum);
                 const imageBuffer = await sharp(result.path).toBuffer();
                 const base64Image = imageBuffer.toString('base64');
 
-                // Call GPT-4o Vision
-                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, pageWidth, pageHeight);
+                // Call GPT-4o Vision with SPECIFIC page dimensions
+                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
                 allPrices.push(...prices);
 
                 // Clean up temp file
