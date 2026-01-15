@@ -232,31 +232,46 @@ class CatalogMarkupService {
             const newValue = originalValue * (1 + markupPercentage / 100);
             const newPriceText = this.formatBrazilianPrice(newValue);
 
-            // Calculate font size based on box height.
-            // If Vision provided a large box (e.g. 50px height), we want large font.
-            // Text extraction generally gives small height (12px), so we keep min 7.
-            // We removed the cap of 10px to allow large prices.
-            let fontSize = priceInfo.height * 0.75;
-            if (fontSize < 7) fontSize = 7;
+            // Tunning Font Size:
+            // reduce multiplier from 0.75 to 0.5 to behave better with large boxes
+            let fontSize = priceInfo.height * 0.5;
+            if (fontSize < 8) fontSize = 8; // min size
+            if (fontSize > 40) fontSize = 40; // max safety cap (prevent absurdly huge text)
 
-            // Adjust Y slightly to center text vertically in the box
-            // PDF text is drawn from baseline. X X X
-            // 0.2 factor is an approximation for baseline offset.
-            const textY = priceInfo.y + (priceInfo.height * 0.15);
+            // Measure text width to ensure white box covers it
+            const textWidth = font.widthOfTextAtSize(newPriceText, fontSize);
 
-            // Cover old price with white rectangle
-            // Use exact box relative to priceInfo
+            // Box dimensions
+            // Use the wider of: original box width OR new text width (plus padding)
+            const boxWidth = Math.max(priceInfo.width, textWidth + 8);
+            const boxHeight = priceInfo.height;
+
+            // Center the new box relative to the original center
+            // Original Center X = priceInfo.x + (priceInfo.width / 2)
+            // New Start X = Original Center X - (boxWidth / 2)
+            const originalCenterX = priceInfo.x + (priceInfo.width / 2);
+            const newX = originalCenterX - (boxWidth / 2);
+
+            // Centering Y is tricky because PDF coordinates are bottom-up
+            // We'll trust the priceInfo.y as the bottom anchor but adjust slightly
+            const textY = priceInfo.y + (boxHeight * 0.2); // lift text slightly
+
+            // Draw White Background
             page.drawRectangle({
-                x: priceInfo.x - 2,
+                x: newX - 2,
                 y: priceInfo.y - 2,
-                width: priceInfo.width + 4,
-                height: priceInfo.height + 4,
+                width: boxWidth + 4,
+                height: boxHeight + 4, // slightly taller
                 color: rgb(1, 1, 1),
             });
 
-            // Draw new price
+            // Draw Text centered in the white box
+            // actually we can just use newX + padding if we calculated newX for changes
+            // But let's center text in the calculated boxWidth
+            const textX = newX + (boxWidth - textWidth) / 2;
+
             page.drawText(newPriceText, {
-                x: priceInfo.x,
+                x: textX,
                 y: textY,
                 size: fontSize,
                 font: font,
