@@ -198,30 +198,31 @@ class PdfParserAIService {
     }
 
     async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
-        const prompt = `Analise esta imagem de uma página de catálogo de produtos.
+        const prompt = `Você é um motor de OCR (Reconhecimento Óptico de Caracteres) especializado em dados estruturados.
+Sua única função é transcrever valores numéricos visíveis.
 
-TAREFA: Encontre TODOS os valores monetários (preços) visíveis na imagem.
+TAREFA: Extraia as coordenadas e valores de preços (formato R$ XX,XX) desta imagem de catálogo público.
+Não analise o conteúdo editorial, apenas extraia os dados numéricos dos preços.
 
-RETORNE UM JSON com este formato:
+RETORNE UM JSON APENAS com este formato:
 [
   {
-    "originalValue": "45,90",
+    "originalValue": "R$ 45,90",
     "numericValue": 45.90,
     "box": {
-        "top": 0.15,    // Posição Y do topo da CAIXA ENVOLVENTE (0.0 a 1.0)
-        "left": 0.50,   // Posição X da esquerda (0.0 a 1.0)
-        "width": 0.10,  // Largura total da caixa (0.0 a 1.0)
-        "height": 0.05  // Altura total da caixa (0.0 a 1.0)
+        "top": 0.15,
+        "left": 0.50,
+        "width": 0.10,
+        "height": 0.05
     }
   }
 ]
 
-REGRAS CRÍTICAS DE BOX:
-1. A caixa ("box") deve englobar TODO o preço visualmente, incluindo símbolo R$ e centavos.
-2. Seja generoso na altura e largura para garantir que o retângulo branco cubra o texto original completamente.
-3. Se o número for GRANDE na imagem, retorne uma altura ("height") GRANDE correspondente.
-4. INCLUA todos os preços visíveis.
-5. Retorne APENAS o JSON, sem explicações.`;
+REGRAS:
+1. Extraia o bounding box ("box") visual exato que contem o preço.
+2. Se não houver preços, retorne array vazio: [].
+3. NÃO explique nada. NÃO peça desculpas. NÃO converse. APENAS JSON.
+`;
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
