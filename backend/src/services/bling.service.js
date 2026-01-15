@@ -279,9 +279,49 @@ class BlingService {
 
         // Clean target phone for comparison
         const targetPhone = phone ? phone.replace(/\D/g, '') : '';
+        let allCandidates = [];
 
-        // 1. Search by Name (primary strategy since phone search is unreliable in 'pesquisa')
-        if (name) {
+        // 1. PRIMARY STRATEGY: Search by phone variations first (most reliable for deduplication)
+        if (phone) {
+            const variations = this._generatePhoneVariations(targetPhone);
+            console.log(`[BlingService] Searching client by phone variations (${variations.length} variations)...`);
+
+            for (const variation of variations.slice(0, 5)) { // Limit to 5 variations to avoid rate limits
+                await this._sleep(350);
+                try {
+                    const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${encodeURIComponent(variation)}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (response.data.data && Array.isArray(response.data.data)) {
+                        // Add to candidates, filter by phone match
+                        for (const client of response.data.data) {
+                            const clientPhone = (client.celular || client.telefone || '').replace(/\D/g, '');
+
+                            // Check if phone matches
+                            const phoneMatches = clientPhone === targetPhone ||
+                                (targetPhone && clientPhone.endsWith(targetPhone.slice(-8))) ||
+                                (clientPhone && targetPhone.endsWith(clientPhone.slice(-8)));
+
+                            if (phoneMatches) {
+                                // Avoid duplicates
+                                if (!allCandidates.find(c => c.id === client.id)) {
+                                    allCandidates.push(client);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Ignore search errors, continue with next variation
+                }
+
+                // If we found candidates, stop searching
+                if (allCandidates.length > 0) break;
+            }
+        }
+
+        // 2. SECONDARY STRATEGY: Search by name if phone search failed
+        if (allCandidates.length === 0 && name) {
             await this._sleep(350);
             try {
                 console.log(`[BlingService] Searching client by name: "${name}"`);
@@ -290,49 +330,62 @@ class BlingService {
                 });
 
                 if (response.data.data && Array.isArray(response.data.data)) {
-                    // Client-side filtering by phone
-                    const match = response.data.data.find(client => {
-                        const clientPhone = (client.celular || '').replace(/\D/g, '');
-                        // Check if phone matches (allowing partial match if one is 11 and other is 10 chars, etc, best effort)
-                        // Or strict equality of sanitized numbers
-                        return clientPhone === targetPhone ||
-                            (targetPhone && clientPhone.endsWith(targetPhone)) ||
-                            (clientPhone && targetPhone.endsWith(clientPhone));
-                    });
+                    // Filter by phone match if we have a phone
+                    for (const client of response.data.data) {
+                        const clientPhone = (client.celular || client.telefone || '').replace(/\D/g, '');
 
-                    if (match) {
-                        console.log(`[BlingService] ✓ Found client by name "${name}" with matching phone: ${match.celular}`);
-                        return match;
+                        if (targetPhone) {
+                            const phoneMatches = clientPhone === targetPhone ||
+                                (targetPhone && clientPhone.endsWith(targetPhone.slice(-8))) ||
+                                (clientPhone && targetPhone.endsWith(clientPhone.slice(-8)));
+
+                            if (phoneMatches && !allCandidates.find(c => c.id === client.id)) {
+                                allCandidates.push(client);
+                            }
+                        } else {
+                            // If no phone, just match by name
+                            if (!allCandidates.find(c => c.id === client.id)) {
+                                allCandidates.push(client);
+                            }
+                        }
                     }
                 }
             } catch (error) {
-                console.warn('[BlingService] Name search failed or empty:', error.message);
+                console.warn('[BlingService] Name search failed:', error.message);
             }
         }
 
-        // 2. Fallback: Search by Phone (if name strategy failed, though we know 'pesquisa' by phone is weak)
-        // We keep this just in case Bling improves indexing or for specific number formats
-        if (phone) {
-            const cleanPhone = phone.replace(/\D/g, '');
-            const variations = this._generatePhoneVariations(cleanPhone);
-
-            for (const variation of variations) {
-                await this._sleep(350);
-                try {
-                    const response = await axios.get(`${this.baseUrl}/contatos?pesquisa=${variation}`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-
-                    if (response.data.data && response.data.data.length > 0) {
-                        console.log(`[BlingService] ✓ Found client with variation: ${variation}`);
-                        return response.data.data[0];
-                    }
-                } catch (e) { }
-            }
+        // 3. SELECT BEST CANDIDATE: Prioritize customers with CPF/CNPJ
+        if (allCandidates.length === 0) {
+            console.log(`[BlingService] ✗ No existing client found for "${name}" / "${phone}"`);
+            return null;
         }
 
-        console.log(`[BlingService] ✗ No existing client found for "${name}" / "${phone}"`);
-        return null;
+        if (allCandidates.length === 1) {
+            console.log(`[BlingService] ✓ Found 1 client: ID ${allCandidates[0].id}, Name: ${allCandidates[0].nome}`);
+            return allCandidates[0];
+        }
+
+        // Multiple candidates found - prioritize by CPF/CNPJ
+        console.log(`[BlingService] Found ${allCandidates.length} candidates. Prioritizing by CPF/CNPJ...`);
+
+        // Sort: customers with CPF/CNPJ first
+        allCandidates.sort((a, b) => {
+            const aHasDoc = !!(a.cpf || a.cnpj || a.numeroDocumento);
+            const bHasDoc = !!(b.cpf || b.cnpj || b.numeroDocumento);
+
+            if (aHasDoc && !bHasDoc) return -1;
+            if (!aHasDoc && bHasDoc) return 1;
+
+            // If both have or both don't have docs, prefer more recently updated
+            return (b.id || 0) - (a.id || 0);
+        });
+
+        const selected = allCandidates[0];
+        const hasDoc = !!(selected.cpf || selected.cnpj || selected.numeroDocumento);
+        console.log(`[BlingService] ✓ Selected client: ID ${selected.id}, Name: ${selected.nome}, Has CPF/CNPJ: ${hasDoc}`);
+
+        return selected;
     }
 
     /**
