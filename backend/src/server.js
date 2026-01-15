@@ -196,9 +196,15 @@ async function startServer() {
             // -------------------------------------------------------------
 
             // app.listen... moved below
-            app.listen(PORT, () => {
+            const server = app.listen(PORT, () => {
                 console.log(`[Server] Running on port ${PORT}`);
             });
+
+            // Set timeouts to unlimited (0 = no timeout)
+            server.timeout = 0; // Request timeout
+            server.keepAliveTimeout = 0; // Keep-alive timeout
+            server.headersTimeout = 0; // Headers timeout
+            console.log('[Server] Timeouts set to unlimited for long PDF processing');
         }).catch(err => {
             console.error('Failed to sync database:', err);
         });
