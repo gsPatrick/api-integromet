@@ -1,4 +1,5 @@
 const CatalogProduct = require('../models/CatalogProduct');
+const Campaign = require('../models/Campaign');
 const catalogService = require('../services/catalog.service');
 const catalogAssistant = require('../services/catalogAssistant.service');
 const catalogMarkupService = require('../services/catalogMarkup.service');
@@ -379,23 +380,38 @@ class CatalogController {
         try {
             // Multer fields: { pdf: [file], pricePdf: [file] }
             const files = req.files || {};
-            const visualPdf = files['pdf'] ? files['pdf'][0] : req.file;
+            let visualPdf = files['pdf'] ? files['pdf'][0] : req.file;
+            let pdfPath = null;
+            let isUploaded = false; // Flag to know if we should delete the file later
 
-            if (!visualPdf) {
-                return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
+            // Case 1: Uploaded File
+            if (visualPdf) {
+                pdfPath = visualPdf.path;
+                isUploaded = true;
+            }
+            // Case 2: Fallback to Campaign File
+            else if (req.body.campaignId) {
+                const campaign = await Campaign.findByPk(req.body.campaignId);
+                if (campaign && campaign.visualPdfPath) {
+                    pdfPath = campaign.visualPdfPath;
+                    console.log(`[CatalogController] Using existing Campaign PDF: ${pdfPath}`);
+                }
+            }
+
+            if (!pdfPath) {
+                return res.status(400).json({ error: 'Nenhum arquivo PDF enviado e nenhum PDF associado à campanha encontrado.' });
             }
 
             const pricePdfs = files['pricePdf'] || [];
             const markupPercentage = parseFloat(req.body.markupPercentage);
 
-            if (isNaN(markupPercentage) || markupPercentage < 0) {
+            if (isNaN(markupPercentage)) { // Accept negative values
                 return res.status(400).json({ error: 'Porcentagem de markup inválida' });
             }
 
-            const pdfPath = visualPdf.path;
             // Map to array of paths
             const pricePdfPaths = pricePdfs.map(f => f.path);
-            const originalName = visualPdf.originalname || 'catalog.pdf';
+            const originalName = visualPdf ? (visualPdf.originalname || 'catalog.pdf') : 'campanha_catalogo.pdf';
 
             console.log(`[CatalogController] Generating markup PDF: ${originalName} + ${pricePdfPaths.length} Price Lists with ${markupPercentage}%`);
 
@@ -413,7 +429,10 @@ class CatalogController {
                 }
                 // Clean up the uploaded files after processing
                 try {
-                    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+                    // Only delete Visual PDF if it was uploaded for this request
+                    if (isUploaded && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+
+                    // Always delete uploaded Price PDFs (they are transient in this context)
                     if (pricePdfPaths.length > 0) {
                         pricePdfPaths.forEach(p => {
                             if (fs.existsSync(p)) fs.unlinkSync(p);
