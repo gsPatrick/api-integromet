@@ -150,13 +150,7 @@ class PdfParserAIService {
 
         // Configure pdf2pic
         // Configure pdf2pic
-        const options = {
-            density: 150, // DPI - higher = better quality but more tokens
-            savePath: '/tmp',
-            format: 'png'
-        };
-
-        const converter = fromBuffer(pdfBuffer, options);
+        // Initial configuration moved inside loop for dynamic sizing
 
         // Get page count
         const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -181,9 +175,30 @@ class PdfParserAIService {
                 const specificPageWidth = viewport.width;
                 const specificPageHeight = viewport.height;
 
-                // Convert page to image
-                const result = await converter(pageNum);
+                // Calculate Exact Pixels for 150 DPI to fix Aspect Ratio
+                const density = 150;
+                const widthPx = Math.round(specificPageWidth * (density / 72));
+                const heightPx = Math.round(specificPageHeight * (density / 72));
+
+                // Instantiate pdf2pic PER PAGE to force correct dimensions
+                const { fromBuffer } = require('pdf2pic');
+                const pageOptions = {
+                    density: density,
+                    savePath: '/tmp',
+                    format: 'png',
+                    width: widthPx,
+                    height: heightPx
+                };
+                const pageConverter = fromBuffer(pdfBuffer, pageOptions);
+
+                // Convert page
+                const result = await pageConverter(pageNum);
                 const imageBuffer = await sharp(result.path).toBuffer();
+
+                // DEBUG: Check Image Dimensions
+                const metadata = await sharp(imageBuffer).metadata();
+                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.height} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
+
                 const base64Image = imageBuffer.toString('base64');
 
                 // Call GPT-4o Vision with SPECIFIC page dimensions
@@ -272,6 +287,8 @@ If no prices are found, return [].`;
                 const visionBottom = top + heightPct;
                 const pdfY = pageHeight - (visionBottom * pageHeight);
                 const pdfX = left * pageWidth;
+
+                console.log(`[DEBUG] Page ${pageIndex + 1}: Value=${p.numericValue} BoxTop=${top.toFixed(3)} BoxH=${heightPct.toFixed(3)} -> PDF_Y=${pdfY.toFixed(2)} PageH=${pageHeight}`);
 
                 return {
                     text: p.originalValue,
