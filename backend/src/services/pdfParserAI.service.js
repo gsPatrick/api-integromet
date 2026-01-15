@@ -207,19 +207,21 @@ RETORNE UM JSON com este formato:
   {
     "originalValue": "45,90",
     "numericValue": 45.90,
-    "approximateX": 0.25,
-    "approximateY": 0.35
+    "box": {
+        "top": 0.15,    // Posição Y do topo da CAIXA ENVOLVENTE (0.0 a 1.0)
+        "left": 0.50,   // Posição X da esquerda (0.0 a 1.0)
+        "width": 0.10,  // Largura total da caixa (0.0 a 1.0)
+        "height": 0.05  // Altura total da caixa (0.0 a 1.0)
+    }
   }
 ]
 
-REGRAS:
-1. originalValue: O texto exato como aparece (ex: "R$ 45,90" ou "45,90")
-2. numericValue: O valor como número (ponto para decimais)
-3. approximateX: Posição horizontal aproximada (0.0 = esquerda, 1.0 = direita)
-4. approximateY: Posição vertical aproximada (0.0 = topo, 1.0 = base)
-5. INCLUA todos os preços visíveis, mesmo pequenos
-6. Se não houver preços, retorne []
-7. Retorne APENAS o JSON, sem explicações`;
+REGRAS CRÍTICAS DE BOX:
+1. A caixa ("box") deve englobar TODO o preço visualmente, incluindo símbolo R$ e centavos.
+2. Seja generoso na altura e largura para garantir que o retângulo branco cubra o texto original completamente.
+3. Se o número for GRANDE na imagem, retorne uma altura ("height") GRANDE correspondente.
+4. INCLUA todos os preços visíveis.
+5. Retorne APENAS o JSON, sem explicações.`;
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
@@ -249,15 +251,38 @@ REGRAS:
             const parsed = JSON.parse(cleanContent);
 
             // Convert relative positions to absolute PDF coordinates
-            return parsed.map(p => ({
-                text: p.originalValue,
-                value: p.numericValue,
-                x: p.approximateX * pageWidth,
-                y: pageHeight - (p.approximateY * pageHeight), // PDF Y is from bottom
-                width: String(p.originalValue).length * 8,
-                height: 12,
-                pageIndex: pageIndex
-            }));
+            return parsed.map(p => {
+                const box = p.box || {};
+
+                // Fallback or use explicitly returned box
+                const top = box.top !== undefined ? box.top : (p.approximateY || 0);
+                const left = box.left !== undefined ? box.left : (p.approximateX || 0);
+                const widthPct = box.width || 0.15; // Generous default
+                const heightPct = box.height || 0.03;
+
+                const w = widthPct * pageWidth;
+                const h = heightPct * pageHeight;
+
+                // Vision Top Y = top
+                // PDF Y (bottom-left origin) = pageHeight - (Vision Top + Height)
+                // Actually: Top of box in PDF Y = pageHeight - (Vision Top). 
+                // But PDF drawText/drawRectangle usually takes Bottom-Left corner (X, Y).
+                // So we need: Y = pageHeight - (Vision Top + Vision Height)
+
+                const visionBottom = top + heightPct;
+                const pdfY = pageHeight - (visionBottom * pageHeight);
+                const pdfX = left * pageWidth;
+
+                return {
+                    text: p.originalValue,
+                    value: p.numericValue,
+                    x: pdfX,
+                    y: pdfY,
+                    width: w,
+                    height: h,
+                    pageIndex: pageIndex
+                };
+            });
         } catch (e) {
             console.error('[PdfParserAI] Failed to parse Vision response:', e.message);
             return [];

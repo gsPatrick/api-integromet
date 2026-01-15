@@ -231,9 +231,21 @@ class CatalogMarkupService {
 
             const newValue = originalValue * (1 + markupPercentage / 100);
             const newPriceText = this.formatBrazilianPrice(newValue);
-            const fontSize = Math.max(7, Math.min(priceInfo.height * 0.8, 10));
+
+            // Calculate font size based on box height.
+            // If Vision provided a large box (e.g. 50px height), we want large font.
+            // Text extraction generally gives small height (12px), so we keep min 7.
+            // We removed the cap of 10px to allow large prices.
+            let fontSize = priceInfo.height * 0.75;
+            if (fontSize < 7) fontSize = 7;
+
+            // Adjust Y slightly to center text vertically in the box
+            // PDF text is drawn from baseline. X X X
+            // 0.2 factor is an approximation for baseline offset.
+            const textY = priceInfo.y + (priceInfo.height * 0.15);
 
             // Cover old price with white rectangle
+            // Use exact box relative to priceInfo
             page.drawRectangle({
                 x: priceInfo.x - 2,
                 y: priceInfo.y - 2,
@@ -245,7 +257,7 @@ class CatalogMarkupService {
             // Draw new price
             page.drawText(newPriceText, {
                 x: priceInfo.x,
-                y: priceInfo.y,
+                y: textY,
                 size: fontSize,
                 font: font,
                 color: rgb(0.8, 0, 0),
