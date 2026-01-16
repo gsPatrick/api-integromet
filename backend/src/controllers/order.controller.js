@@ -96,8 +96,22 @@ class OrderController {
             if (updates.extractedSize !== undefined) allowedUpdates.extractedSize = updates.extractedSize;
             if (updates.extractedColor !== undefined) allowedUpdates.extractedColor = updates.extractedColor;
             if (updates.extractedColorCode !== undefined) allowedUpdates.extractedColorCode = updates.extractedColorCode;
-            if (updates.sellPrice !== undefined) allowedUpdates.sellPrice = updates.sellPrice;
-            if (updates.quantity !== undefined) allowedUpdates.quantity = updates.quantity;
+
+            if (updates.sellPrice !== undefined) {
+                let price = updates.sellPrice;
+                if (typeof price === 'string') {
+                    price = price.trim() === '' ? 0 : parseFloat(price.replace(',', '.'));
+                }
+                allowedUpdates.sellPrice = isNaN(price) ? 0 : price;
+            }
+
+            if (updates.quantity !== undefined) {
+                let qty = updates.quantity;
+                if (typeof qty === 'string') {
+                    qty = qty.trim() === '' ? 1 : parseInt(qty, 10);
+                }
+                allowedUpdates.quantity = isNaN(qty) ? 1 : qty;
+            }
 
             const [updated] = await Order.update(allowedUpdates, { where: { id } });
 
