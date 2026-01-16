@@ -23,9 +23,18 @@ class CatalogController {
      */
     async listProducts(req, res) {
         try {
-            const { search, category, catalog } = req.query;
+            const { search, category, catalog, campaignId } = req.query;
 
             const where = { isActive: true };
+
+            if (campaignId) {
+                where.campaignId = parseInt(campaignId);
+            } else {
+                // If no specific campaign selected, show products from active campaigns
+                const activeCampaigns = await Campaign.findAll({ where: { isActive: true } });
+                const activeIds = activeCampaigns.map(c => c.id);
+                where.campaignId = { [Op.in]: activeIds };
+            }
 
             if (search) {
                 where[Op.or] = [
@@ -70,8 +79,9 @@ class CatalogController {
 
             const pdfPath = req.file.path;
             const catalogName = req.body.catalogName || req.file.originalname.replace('.pdf', '');
+            const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : null;
 
-            console.log(`[CatalogController] Processing PDF: ${catalogName}`);
+            console.log(`[CatalogController] Processing PDF: ${catalogName} (Campaign ID: ${campaignId})`);
 
             // 1. Upload to OpenAI Assistant Vector Store
             try {
@@ -86,7 +96,8 @@ class CatalogController {
                     category: 'METADATA',
                     catalogName: catalogName,
                     pdfPath: pdfPath, // Keep path for markup generation
-                    isActive: true
+                    isActive: true,
+                    campaignId: campaignId
                 });
 
             } catch (assistError) {
