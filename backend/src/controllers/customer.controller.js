@@ -83,7 +83,7 @@ class CustomerController {
             const pendingOrders = await Order.findAll({
                 where: {
                     customerPhone: decodedPhone,
-                    status: 'PENDING'
+                    blingSyncedAt: null
                 }
             });
 
