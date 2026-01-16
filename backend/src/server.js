@@ -609,11 +609,14 @@ async function startServer() {
         // Attach sequelize to app for easier access if needed, though it's already imported
         app.sequelize = sequelize;
 
-        app.sequelize.sync({ alter: true }).then(async () => {
-            console.log('Database synced (ALTER mode - Data preserved)');
+        // Check Database Connection
+        await sequelize.authenticate();
+        console.log('[Server] Database connection established (Migrations should have run).');
 
+        // Logic (previously inside sync)
+        const runInitialization = async () => {
             // Seed Default Admin User
-            const User = require('./models/User'); // Ensure User model is loaded
+            const User = require('./models/User');
             const Campaign = require('./models/Campaign');
             const Order = require('./models/Order');
 
@@ -673,7 +676,6 @@ async function startServer() {
             }
             // -------------------------------------------------------------
 
-            // app.listen... moved below
             const server = app.listen(PORT, () => {
                 console.log(`[Server] Running on port ${PORT}`);
             });
@@ -683,9 +685,9 @@ async function startServer() {
             server.keepAliveTimeout = 0; // Keep-alive timeout
             server.headersTimeout = 0; // Headers timeout
             console.log('[Server] Timeouts set to unlimited for long PDF processing');
-        }).catch(err => {
-            console.error('Failed to sync database:', err);
-        });
+        };
+
+        await runInitialization();
     } catch (error) {
         console.error('[Server] Failed to start:', error);
     }

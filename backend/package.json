@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/server.js",
+    "start": "npx sequelize-cli db:migrate && node src/server.js",
     "fix-names": "node fix_names_api.js"
   },
   "keywords": [],
@@ -28,5 +28,8 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
     "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "sequelize-cli": "^6.6.5"
   }
 }
