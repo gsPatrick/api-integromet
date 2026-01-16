@@ -125,73 +125,72 @@ class AsaasService {
     }
 
     /**
-     * Create payment link (cobrança) in Asaas
-     * @param {string} customerId - Asaas customer ID (cus_xxx)
-     * @param {number} orderId - Local order ID (for externalReference)
+     * Create payment link (Page Checkout) in Asaas
+     * This method allows creating a payment link without a pre-existing validated customer (no CPF needed).
+     * The customer fills their info at checkout.
+     * @param {number} orderId - Local order ID
      * @param {number} value - Payment value
-     * @param {string} description - Payment description
+     * @param {string} name - Link name (e.g. Order #123)
+     * @param {string} description - Description
      * @returns {object} - { id, invoiceUrl }
      */
-    async createPaymentLink(customerId, orderId, value, description) {
+    async createPaymentLink(orderId, value, name, description) {
         try {
             const headers = await this.getHeaders();
-
-            // Calculate due date (3 days from now)
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + 3);
-            const dueDateStr = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            const dueDateLimitDays = 3;
 
             const payload = {
-                customer: customerId,
-                billingType: 'UNDEFINED', // Allow PIX, Card, Boleto
-                value: parseFloat(value),
-                dueDate: dueDateStr,
+                name: name || `Pedido #${orderId}`,
                 description: description || `Pedido #${orderId}`,
-                externalReference: String(orderId) // Critical: links Asaas to our Order.id
+                endDate: null,
+                value: parseFloat(value),
+                chargeType: 'DETACHED',   // One-time charge
+                dueDateLimitDays: dueDateLimitDays,
             };
 
-            console.log(`[Asaas] Creating payment: R$ ${value} for customer ${customerId}`);
+            console.log(`[Asaas] Creating Payment Link (Checkout V3): R$ ${value} - ${payload.name}`);
 
             const response = await axios.post(
-                `${this.baseUrl}/payments`,
+                `${this.baseUrl}/paymentLinks`,
                 payload,
                 { headers }
             );
 
-            console.log(`[Asaas] Payment created: ${response.data.id} - ${response.data.invoiceUrl}`);
+            console.log(`[Asaas] Payment Link created: ${response.data.id} - ${response.data.url}`);
 
             return {
-                id: response.data.id,           // pay_xxx
-                invoiceUrl: response.data.invoiceUrl, // Link to send to customer
-                status: response.data.status
+                id: response.data.id,
+                invoiceUrl: response.data.url,
+                status: 'ACTIVE'
             };
         } catch (error) {
-            console.error('[Asaas] Error creating payment:', error.response?.data || error.message);
-            throw new Error('Falha ao criar link de pagamento: ' + (error.response?.data?.errors?.[0]?.description || error.message));
+            console.error('[Asaas] Error creating payment link:', error.response?.data || error.message);
+            throw new Error('Falha ao criar link de pagamento (NOVO V3): ' + (error.response?.data?.errors?.[0]?.description || error.message));
         }
     }
 
     /**
-     * Complete flow: upsert customer and create payment link
-     * @param {object} orderData - Order data containing customer info and value
+     * Complete flow: Create payment link (Checkout Page)
+     * We SKIP upsertCustomer because we want to allow payment without knowing CPF.
+     * @param {object} orderData - Order data
      * @returns {object} - { asaasId, paymentLink }
      */
     async generatePaymentLink(orderData) {
-        const { customerName, customerPhone, orderId, totalValue, description } = orderData;
+        const { customerName, orderId, totalValue, description } = orderData;
 
-        // 1. Upsert customer
-        const customerId = await this.upsertCustomer(customerName, customerPhone);
+        // Direct call to createPaymentLink (Checkout Page)
+        // We pass orderId to name for visibility
+        const linkName = `Pedido #${orderId} - ${customerName}`;
 
-        // 2. Create payment
         const payment = await this.createPaymentLink(
-            customerId,
             orderId,
             totalValue,
-            description || `Pedido #${orderId} - ${customerName}`
+            linkName,
+            description || `Pedido no WhatsApp`
         );
 
         return {
-            asaasId: payment.id,
+            asaasId: payment.id,     // This will be the PAYMENT LINK ID now, not Charge ID.
             paymentLink: payment.invoiceUrl,
             status: payment.status
         };
