@@ -17,7 +17,7 @@ export default function LoginPage() {
         setTimeout(() => {
             if (username === 'admin' && password === 'admin') {
                 localStorage.setItem('isLoggedIn', 'true');
-                router.push('/dashboard');
+                router.push('/configuracoes/campanhas');
             } else {
                 alert('Credenciais inválidas. Use admin/admin');
             }

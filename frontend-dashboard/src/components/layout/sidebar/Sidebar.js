@@ -13,6 +13,7 @@ export default function Sidebar() {
         { href: '/dashboard', label: 'Pedidos', icon: LayoutDashboard },
         { href: '/clientes', label: 'Clientes', icon: User },
         { href: '/catalogo', label: 'Catálogo', icon: BookOpen },
+        { href: '/configuracoes/campanhas', label: 'Campanhas', icon: LayoutDashboard }, // Or Calendar/Flag? Using LayoutDashboard for now or import new one maybe?
         { href: '/historico', label: 'Histórico Live', icon: Radio },
         { href: '/configuracoes', label: 'Configurações', icon: Settings },
     ];

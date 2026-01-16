@@ -17,14 +17,31 @@ export default function Dashboard() {
     const [previewData, setPreviewData] = useState(null); // { group, selectedIds }
     const [syncFilter, setSyncFilter] = useState('all'); // 'all', 'pending', 'synced'
 
+    // Campaign Filter
+    const [selectedCampaignId, setSelectedCampaignId] = useState('');
+    const [selectedCampaignName, setSelectedCampaignName] = useState('Todas Ativas');
+    const [isInitialized, setIsInitialized] = useState(false);
+
     useEffect(() => {
-        fetchOrders();
+        // Read selected campaign from localStorage (set on campaigns page)
+        const campaignId = localStorage.getItem('selectedCampaignId') || '';
+        const campaignName = localStorage.getItem('selectedCampaignName') || 'Todas Ativas';
+        setSelectedCampaignId(campaignId);
+        setSelectedCampaignName(campaignName);
+        setIsInitialized(true);
     }, []);
+
+    useEffect(() => {
+        if (isInitialized) {
+            fetchOrders();
+        }
+    }, [selectedCampaignId, isInitialized]);
 
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await api.get('/orders?limit=100');
+            const campaignFilter = selectedCampaignId ? `&campaignId=${selectedCampaignId}` : '';
+            const response = await api.get(`/orders?limit=100${campaignFilter}`);
             const grouped = {};
             response.data.data.forEach(order => {
                 const phone = order.customerPhone;
@@ -197,10 +214,32 @@ export default function Dashboard() {
             </div>
 
             {/* Filter Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                {/* Campaign Badge */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 16px',
+                    background: selectedCampaignId ? '#fff3e0' : '#f5f5f5',
+                    borderRadius: '8px',
+                    border: selectedCampaignId ? '1px solid #e67e22' : '1px solid #e5e5e5'
+                }}>
+                    <span style={{ color: '#71717a', fontSize: '0.875rem' }}>Campanha:</span>
+                    <span style={{
+                        fontWeight: 600,
+                        color: selectedCampaignId ? '#e67e22' : '#2d3436',
+                        fontSize: '0.875rem'
+                    }}>
+                        {selectedCampaignName}
+                    </span>
+                </div>
+
+                <div style={{ width: '1px', height: '24px', background: '#e5e5e5' }} />
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#71717a', fontSize: '0.875rem' }}>
                     <Filter size={16} />
-                    <span>Filtrar:</span>
+                    <span>Status:</span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button

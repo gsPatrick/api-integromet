@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import api from '../../services/api';
 import { CheckCircle, Clock, Radio, Package, User, Phone } from 'lucide-react';
@@ -16,8 +17,25 @@ const getImageUrl = (imageUrl) => {
 };
 
 export default function HistoryPage() {
-    const { data: orders, error } = useSWR('/orders', fetcher, { refreshInterval: 3000 });
-    const loading = !orders && !error;
+    // Campaign Filter (from localStorage)
+    const [selectedCampaignId, setSelectedCampaignId] = useState('');
+    const [selectedCampaignName, setSelectedCampaignName] = useState('Todas Ativas');
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    useEffect(() => {
+        // Read selected campaign from localStorage
+        const campaignId = localStorage.getItem('selectedCampaignId') || '';
+        const campaignName = localStorage.getItem('selectedCampaignName') || 'Todas Ativas';
+        setSelectedCampaignId(campaignId);
+        setSelectedCampaignName(campaignName);
+        setIsInitialized(true);
+    }, []);
+
+    const campaignFilter = selectedCampaignId ? `&campaignId=${selectedCampaignId}` : '';
+    // If not initialized, pass null to SWR to prevent fetch
+    const swrKey = isInitialized ? `/orders?limit=100${campaignFilter}` : null;
+    const { data: orders, error } = useSWR(swrKey, fetcher, { refreshInterval: 3000 });
+    const loading = !orders && !error && isInitialized;
 
     return (
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -26,7 +44,9 @@ export default function HistoryPage() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '32px'
+                marginBottom: '32px',
+                flexWrap: 'wrap',
+                gap: '16px'
             }}>
                 <div>
                     <h1 style={{
@@ -46,25 +66,47 @@ export default function HistoryPage() {
                     </p>
                 </div>
 
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    background: '#dcfce7',
-                    color: '#166534',
-                    padding: '8px 16px',
-                    borderRadius: '999px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    {/* Campaign Badge */}
                     <div style={{
-                        width: '8px',
-                        height: '8px',
-                        background: '#16a34a',
-                        borderRadius: '50%',
-                        animation: 'pulse 2s infinite'
-                    }} />
-                    Ao Vivo
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        background: selectedCampaignId ? '#fff3e0' : '#f5f5f5',
+                        borderRadius: '8px',
+                        border: selectedCampaignId ? '1px solid #e67e22' : '1px solid #e5e5e5'
+                    }}>
+                        <span style={{ color: '#71717a', fontSize: '0.875rem' }}>Campanha:</span>
+                        <span style={{
+                            fontWeight: 600,
+                            color: selectedCampaignId ? '#e67e22' : '#2d3436',
+                            fontSize: '0.875rem'
+                        }}>
+                            {selectedCampaignName}
+                        </span>
+                    </div>
+
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: '#dcfce7',
+                        color: '#166534',
+                        padding: '8px 16px',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600
+                    }}>
+                        <div style={{
+                            width: '8px',
+                            height: '8px',
+                            background: '#16a34a',
+                            borderRadius: '50%',
+                            animation: 'pulse 2s infinite'
+                        }} />
+                        Ao Vivo
+                    </div>
                 </div>
             </div>
 

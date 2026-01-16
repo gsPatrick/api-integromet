@@ -7,9 +7,10 @@ import Sidebar from '../components/layout/sidebar/Sidebar';
 export default function RootLayout({ children }) {
     const pathname = usePathname();
     const isLoginPage = pathname === '/login';
+    const isCampaignsPage = pathname === '/configuracoes/campanhas';
 
-    // Login page gets full screen without sidebar
-    if (isLoginPage) {
+    // Login and Campaign Portal pages get full screen without sidebar
+    if (isLoginPage || isCampaignsPage) {
         return (
             <html lang="pt-BR">
                 <body>

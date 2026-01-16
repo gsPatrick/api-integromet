@@ -11,13 +11,31 @@ export default function ClientsPage() {
     const [expandedCustomer, setExpandedCustomer] = useState(null); // Phone of expanded customer
     const [customerOrders, setCustomerOrders] = useState({}); // Cache for fetched orders { phone: [orders] }
 
+    // Campaign Filter (from localStorage)
+    const [selectedCampaignId, setSelectedCampaignId] = useState('');
+    const [selectedCampaignName, setSelectedCampaignName] = useState('Todas Ativas');
+    const [isInitialized, setIsInitialized] = useState(false);
+
     useEffect(() => {
-        fetchCustomers();
+        // Read selected campaign from localStorage
+        const campaignId = localStorage.getItem('selectedCampaignId') || '';
+        const campaignName = localStorage.getItem('selectedCampaignName') || 'Todas Ativas';
+        setSelectedCampaignId(campaignId);
+        setSelectedCampaignName(campaignName);
+        setIsInitialized(true);
     }, []);
+
+    useEffect(() => {
+        if (isInitialized) {
+            fetchCustomers();
+        }
+    }, [selectedCampaignId, isInitialized]);
 
     const fetchCustomers = async () => {
         try {
-            const res = await api.get('/customers');
+            setLoading(true);
+            const campaignFilter = selectedCampaignId ? `?campaignId=${selectedCampaignId}` : '';
+            const res = await api.get(`/customers${campaignFilter}`);
             setCustomers(res.data);
         } catch (error) {
             console.error('Failed to fetch customers', error);
@@ -64,13 +82,35 @@ export default function ClientsPage() {
 
     return (
         <div style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ffeaa7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <User size={28} color="#d35400" />
+            <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ffeaa7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <User size={28} color="#d35400" />
+                    </div>
+                    <div>
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Clientes</h1>
+                        <p style={{ color: '#636e72' }}>Gerencie pedidos por cliente</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Clientes</h1>
-                    <p style={{ color: '#636e72' }}>Gerencie pedidos por cliente</p>
+
+                {/* Campaign Badge */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 16px',
+                    background: selectedCampaignId ? '#fff3e0' : '#f5f5f5',
+                    borderRadius: '8px',
+                    border: selectedCampaignId ? '1px solid #e67e22' : '1px solid #dfe6e9'
+                }}>
+                    <span style={{ color: '#636e72', fontSize: '0.9rem' }}>Campanha:</span>
+                    <span style={{
+                        fontWeight: 600,
+                        color: selectedCampaignId ? '#e67e22' : '#2d3436',
+                        fontSize: '0.9rem'
+                    }}>
+                        {selectedCampaignName}
+                    </span>
                 </div>
             </div>
 
