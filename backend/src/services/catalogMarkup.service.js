@@ -249,16 +249,12 @@ class CatalogMarkupService {
             const boxWidth = Math.max(textWidth + 12, priceInfo.width);
             const boxHeight = textHeight + 10;
 
-            // Anchoring Strategy: PAGE-CENTERED (ignores AI's potentially inaccurate X coordinate)
-            // Since all prices in catalogs are typically centered, we use the PAGE CENTER
-            // instead of the AI's detected X position for more consistent results.
-            const { width: pageWidth } = page.getSize();
-            const pageCenterX = pageWidth / 2;
+            // Anchoring Strategy: BOTTOM-CENTER
+            const originalCenterX = priceInfo.x + (priceInfo.width / 2);
 
-            // White Rectangle Position (Bottom Anchor, Page Centered)
-            const rectX = pageCenterX - (boxWidth / 2);
-            // Rect Y anchored to original Bottom Y (from Vision - this is usually accurate)
-            const rectY = priceInfo.y - 2; // slight variance buffer
+            // White Rectangle Position
+            const rectX = originalCenterX - (boxWidth / 2);
+            const rectY = priceInfo.y;
 
             // Draw White Background
             page.drawRectangle({
@@ -269,10 +265,9 @@ class CatalogMarkupService {
                 color: rgb(1, 1, 1),
             });
 
-            // Draw Text Position (Bottom Anchor, Page Centered)
-            const textX = pageCenterX - (textWidth / 2);
-            // Bottom Y + padding
-            const textY = rectY + 6; // Lift text slightly from bottom edge
+            // Draw Text Position
+            const textX = originalCenterX - (textWidth / 2);
+            const textY = rectY + 5;
 
             page.drawText(newPriceText, {
                 x: textX,

@@ -5,28 +5,46 @@ class OrderController {
 
     /**
      * List orders with pagination
-     * GET /orders?page=1&limit=20
+     * GET /orders?page=1&limit=20&campaignId=X
+     * If campaignId is provided, filter by that campaign
+     * Otherwise, show orders from ALL active campaigns
      */
     async listOrders(req, res) {
         try {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 20;
             const offset = (page - 1) * limit;
+            const campaignIdFilter = req.query.campaignId;
 
             const Campaign = require('../models/Campaign');
-            const activeCampaign = await Campaign.findOne({ where: { isActive: true } });
+            const { Op } = require('sequelize');
 
-            if (!activeCampaign) {
-                return res.json({
-                    total: 0,
-                    pages: 0,
-                    currentPage: page,
-                    data: []
-                });
+            let whereClause = {};
+
+            if (campaignIdFilter) {
+                // Filter by specific campaign
+                whereClause.campaignId = parseInt(campaignIdFilter);
+                console.log(`[OrderController] Filtering orders by campaignId: ${campaignIdFilter}`);
+            } else {
+                // Get ALL active campaigns and show their orders
+                const activeCampaigns = await Campaign.findAll({ where: { isActive: true } });
+
+                if (activeCampaigns.length === 0) {
+                    return res.json({
+                        total: 0,
+                        pages: 0,
+                        currentPage: page,
+                        data: []
+                    });
+                }
+
+                const activeCampaignIds = activeCampaigns.map(c => c.id);
+                whereClause.campaignId = { [Op.in]: activeCampaignIds };
+                console.log(`[OrderController] Showing orders from ${activeCampaigns.length} active campaign(s): [${activeCampaigns.map(c => c.name).join(', ')}]`);
             }
 
             const { count, rows } = await Order.findAndCountAll({
-                where: { campaignId: activeCampaign.id },
+                where: whereClause,
                 order: [['createdAt', 'DESC']],
                 limit: limit,
                 offset: offset
