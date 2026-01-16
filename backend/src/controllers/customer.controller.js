@@ -6,10 +6,27 @@ class CustomerController {
 
     /**
      * List unique customers with order stats
-     * GET /customers
+     * GET /customers?campaignId=X
      */
     async listCustomers(req, res) {
         try {
+            const campaignIdFilter = req.query.campaignId;
+            const Campaign = require('../models/Campaign');
+
+            let whereClause = {};
+
+            if (campaignIdFilter) {
+                // Filter by specific campaign
+                whereClause.campaignId = parseInt(campaignIdFilter);
+            } else {
+                // Get ALL active campaigns
+                const activeCampaigns = await Campaign.findAll({ where: { isActive: true } });
+                if (activeCampaigns.length > 0) {
+                    const activeCampaignIds = activeCampaigns.map(c => c.id);
+                    whereClause.campaignId = { [Op.in]: activeCampaignIds };
+                }
+            }
+
             // We group by phone since it's the unique identifier for WhatsApp
             const customers = await Order.findAll({
                 attributes: [
@@ -19,6 +36,7 @@ class CustomerController {
                     [Sequelize.fn('SUM', Sequelize.literal("CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END")), 'pendingOrders'],
                     [Sequelize.fn('MAX', Sequelize.col('createdAt')), 'lastOrderDate']
                 ],
+                where: whereClause,
                 group: ['customerPhone'],
                 order: [[Sequelize.literal('"lastOrderDate"'), 'DESC']]
             });
