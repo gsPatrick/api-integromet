@@ -282,6 +282,22 @@ class WebhookController {
                             console.log(`[Webhook] Assistant found Color Code: ${produto.codigo_cor}`);
                         }
 
+                        // RE-VERIFY CAMPAIGN IF CODE FOUND
+                        // If AI found a code that we didn't have, check which campaign it belongs to
+                        if (bestMatch.codigo && candidates.length > 0) {
+                            for (const cand of candidates) {
+                                // Light check against local DB to see if this code exists in this campaign
+                                const exists = await CatalogController.getProductPrice(bestMatch.codigo, null, cand.id);
+                                if (exists) {
+                                    campaignId = cand.id;
+                                    markupPercentage = cand.markupPercentage || 35;
+                                    collectionName = cand.name;
+                                    console.log(`[Webhook] AI matched product code ${bestMatch.codigo} validated in Campaign "${cand.name}". Switching context.`);
+                                    break;
+                                }
+                            }
+                        }
+
                         console.log(`[Webhook] Assistant found product! Price: R$${catalogPrice}`);
                     } else {
                         console.log('[Webhook] Assistant could not find the product.');
