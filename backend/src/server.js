@@ -156,26 +156,31 @@ async function startServer() {
             // CAMPAIGN MIGRATION: Ensure a Default Campaign exists and claims old orders
             // -------------------------------------------------------------
             try {
-                // 1. Check if ANY campaign exists
-                const count = await Campaign.count();
-                let defaultCampaignId;
+                // 1. Check if a DEFAULT campaign exists
+                let defaultCamp = await Campaign.findOne({ where: { isDefault: true } });
 
-                if (count === 0) {
-                    // Create Default Campaign
-                    const defaultCamp = await Campaign.create({
-                        name: 'Campanha Padrão (Legado)',
-                        isActive: true,
-                        description: 'Campanha automática para pedidos anteriores.'
-                    });
-                    defaultCampaignId = defaultCamp.id;
-                    console.log(`[Server] Created Default Campaign (ID: ${defaultCampaignId})`);
-                } else {
-                    // Use the first one found (or a specific "Default" if we tracked it)
-                    // For now, just finding the first ID to rescue orphans is safe enough,
-                    // or finding one explicitly named 'Campanha Padrão'.
-                    const existing = await Campaign.findOne({ order: [['id', 'ASC']] });
-                    if (existing) defaultCampaignId = existing.id;
+                if (!defaultCamp) {
+                    // Try to find one named "Pronta Entrega" to promote
+                    defaultCamp = await Campaign.findOne({ where: { name: 'Pronta Entrega' } });
+
+                    if (defaultCamp) {
+                        defaultCamp.isDefault = true;
+                        await defaultCamp.save();
+                        console.log(`[Server] Promoted existing 'Pronta Entrega' to Default Campaign.`);
+                    } else {
+                        // Create Default Campaign "Pronta Entrega"
+                        defaultCamp = await Campaign.create({
+                            name: 'Pronta Entrega',
+                            isActive: true,
+                            isDefault: true,
+                            markupPercentage: 35,
+                            description: 'Campanha padrão para pedidos sem catálogo específico.'
+                        });
+                        console.log(`[Server] Created Default Campaign 'Pronta Entrega' (ID: ${defaultCamp.id})`);
+                    }
                 }
+
+                const defaultCampaignId = defaultCamp.id;
 
                 if (defaultCampaignId) {
                     // 2. Update NULL orders
