@@ -115,12 +115,16 @@ app.get('/debug/fix-names', async (req, res) => {
 
         for (const order of orders) {
             let newName = order.productRaw;
-            // Remove duplications " ou Lili..."
+
+            // Clean common dirty suffixes
+            newName = newName.replace(/ ou campanha teste/gi, '');
             newName = newName.replace(/ ou Lili Sampedro Jan 26/g, '');
-            // Replace main one
+
+            // Replace main wrong one
             newName = newName.replace(/Lili Sampedro Jan 26/g, CORRECT_SUFFIX_TEXT);
 
-            // Should resulted in ".... - Precoce Jan 26"
+            // Cleanup double separators if they occurred " - - "
+            // newName = newName.replace(/ - - /g, ' - '); // Optional, use caution
 
             if (newName !== order.productRaw) {
                 await order.update({ productRaw: newName });
