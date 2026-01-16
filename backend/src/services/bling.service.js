@@ -146,21 +146,57 @@ class BlingService {
             try {
                 const phone = (mainOrder.customerPhone || '').replace(/\D/g, '');
                 const name = mainOrder.customerName || '';
-                console.log(`[BlingService] Searching for client: Name="${name}", Phone="${phone}"`);
-                let client = await this._findClient(token, name, phone);
 
-                if (client) {
-                    console.log(`[BlingService] Found existing client: ID ${client.id}, Name: ${client.nome}`);
-                } else {
-                    console.log(`[BlingService] Client not found. Creating new client...`);
-                    client = await this._createClient(token, {
-                        nome: mainOrder.customerName || 'Cliente WhatsApp',
-                        telefone: phone
-                    });
+                // First, check if we have a saved mapping for this phone
+                const CustomerBlingMapping = require('../models/CustomerBlingMapping');
+                let normalizedPhone = phone;
+                if (normalizedPhone.startsWith('55')) {
+                    normalizedPhone = normalizedPhone.substring(2);
                 }
 
-                if (client && client.id) {
-                    clientId = client.id;
+                const existingMapping = await CustomerBlingMapping.findOne({
+                    where: { customerPhone: normalizedPhone }
+                });
+
+                if (existingMapping) {
+                    console.log(`[BlingService] Found saved mapping: Phone ${normalizedPhone} -> Bling Client ${existingMapping.blingClientId} (${existingMapping.blingClientName})`);
+                    clientId = existingMapping.blingClientId;
+                } else {
+                    // No mapping - try to find or create client
+                    console.log(`[BlingService] No mapping found. Searching for client: Name="${name}", Phone="${phone}"`);
+                    let client = await this._findClient(token, name, phone);
+
+                    if (client) {
+                        console.log(`[BlingService] Found existing client: ID ${client.id}, Name: ${client.nome}`);
+                        clientId = client.id;
+
+                        // Save mapping for future use
+                        await CustomerBlingMapping.create({
+                            customerPhone: normalizedPhone,
+                            blingClientId: client.id,
+                            blingClientName: client.nome,
+                            blingClientCpfCnpj: client.numeroDocumento || ''
+                        }).catch(() => { }); // Ignore if already exists
+
+                    } else {
+                        console.log(`[BlingService] Client not found. Creating new client...`);
+                        client = await this._createClient(token, {
+                            nome: mainOrder.customerName || 'Cliente WhatsApp',
+                            telefone: phone
+                        });
+
+                        if (client && client.id) {
+                            clientId = client.id;
+
+                            // Save mapping for future use
+                            await CustomerBlingMapping.create({
+                                customerPhone: normalizedPhone,
+                                blingClientId: client.id,
+                                blingClientName: client.nome || mainOrder.customerName,
+                                blingClientCpfCnpj: ''
+                            }).catch(() => { }); // Ignore if already exists
+                        }
+                    }
                 }
             } catch (clientError) {
                 console.warn('[BlingService] Could not find/create client, proceeding without:', clientError.message);

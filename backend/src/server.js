@@ -11,6 +11,7 @@ const authMiddleware = require('./middleware/auth');
 const User = require('./models/User');
 const CatalogProduct = require('./models/CatalogProduct');
 const MessageContext = require('./models/MessageContext');
+const CustomerBlingMapping = require('./models/CustomerBlingMapping');
 
 require('dotenv').config();
 
@@ -316,6 +317,144 @@ app.get('/debug/bling-clients', async (req, res) => {
 
     } catch (error) {
         console.error('[BlingClients] Error:', error.response?.data || error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// =========================================================================
+// BLING CLIENT MAPPING ENDPOINTS
+// =========================================================================
+
+// Search Bling clients by phone for the selection modal
+app.get('/bling/clients/search', async (req, res) => {
+    try {
+        const blingService = require('./services/bling.service');
+        const axios = require('axios');
+        const phone = req.query.phone;
+
+        if (!phone) {
+            return res.status(400).json({ error: 'phone query param required' });
+        }
+
+        // Normalize phone (remove 55 prefix if present)
+        let searchPhone = phone.replace(/\D/g, '');
+        if (searchPhone.startsWith('55')) {
+            searchPhone = searchPhone.substring(2);
+        }
+
+        const token = await blingService.getValidToken();
+
+        // Search with multiple variations
+        const variations = [
+            searchPhone,
+            searchPhone.slice(-8), // Last 8 digits
+            searchPhone.slice(-10), // Last 10 digits
+        ];
+
+        const foundClients = new Map(); // Use Map to avoid duplicates
+
+        for (const variation of variations) {
+            await new Promise(r => setTimeout(r, 350));
+
+            try {
+                const response = await axios.get(
+                    `https://api.bling.com.br/Api/v3/contatos?pesquisa=${encodeURIComponent(variation)}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                const clients = response.data.data || [];
+                for (const c of clients) {
+                    if (!foundClients.has(c.id)) {
+                        foundClients.set(c.id, {
+                            id: c.id,
+                            nome: c.nome,
+                            cpfCnpj: c.numeroDocumento || '',
+                            telefone: c.telefone || '',
+                            celular: c.celular || ''
+                        });
+                    }
+                }
+            } catch (err) {
+                // Continue on error
+            }
+        }
+
+        res.json({
+            phone: searchPhone,
+            totalResults: foundClients.size,
+            clients: Array.from(foundClients.values())
+        });
+
+    } catch (error) {
+        console.error('[BlingClientSearch] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get existing mapping for a phone
+app.get('/bling/clients/mapping/:phone', async (req, res) => {
+    try {
+        const phone = req.params.phone.replace(/\D/g, '');
+
+        // Try with and without 55 prefix
+        const variations = [phone];
+        if (phone.startsWith('55')) {
+            variations.push(phone.substring(2));
+        } else {
+            variations.push('55' + phone);
+        }
+
+        const mapping = await CustomerBlingMapping.findOne({
+            where: { customerPhone: variations }
+        });
+
+        if (mapping) {
+            res.json({ found: true, mapping });
+        } else {
+            res.json({ found: false });
+        }
+
+    } catch (error) {
+        console.error('[GetMapping] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save mapping between customer phone and Bling client
+app.post('/bling/clients/mapping', async (req, res) => {
+    try {
+        const { customerPhone, blingClientId, blingClientName, blingClientCpfCnpj } = req.body;
+
+        if (!customerPhone || !blingClientId) {
+            return res.status(400).json({ error: 'customerPhone and blingClientId required' });
+        }
+
+        // Normalize phone (without 55)
+        let normalizedPhone = customerPhone.replace(/\D/g, '');
+        if (normalizedPhone.startsWith('55')) {
+            normalizedPhone = normalizedPhone.substring(2);
+        }
+
+        // Upsert mapping
+        const [mapping, created] = await CustomerBlingMapping.upsert({
+            customerPhone: normalizedPhone,
+            blingClientId,
+            blingClientName,
+            blingClientCpfCnpj
+        }, {
+            returning: true
+        });
+
+        console.log(`[BlingMapping] ${created ? 'Created' : 'Updated'} mapping: ${normalizedPhone} -> ${blingClientId}`);
+
+        res.json({
+            success: true,
+            created,
+            mapping: mapping || { customerPhone: normalizedPhone, blingClientId, blingClientName, blingClientCpfCnpj }
+        });
+
+    } catch (error) {
+        console.error('[SaveMapping] Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
