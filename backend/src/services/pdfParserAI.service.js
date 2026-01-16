@@ -5,6 +5,12 @@ class PdfParserAIService {
         this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
         });
+
+        // Ensure Homebrew bin is in PATH for Mac (critical for pdf2pic/gm)
+        if (process.platform === 'darwin' && !process.env.PATH.includes('/opt/homebrew/bin')) {
+            console.log('[PdfParserAI] Adding /opt/homebrew/bin to PATH for GraphicsMagick');
+            process.env.PATH = `/opt/homebrew/bin:${process.env.PATH}`;
+        }
     }
 
     async parsePricePdf(pdfBuffer) {
@@ -175,8 +181,8 @@ class PdfParserAIService {
                 const specificPageWidth = viewport.width;
                 const specificPageHeight = viewport.height;
 
-                // Calculate Exact Pixels for 150 DPI to fix Aspect Ratio
-                const density = 150;
+                // Calculate Exact Pixels for 72 DPI (1:1 with PDF points) to fix Aspect Ratio and prevent oversized images
+                const density = 72;
                 const widthPx = Math.round(specificPageWidth * (density / 72));
                 const heightPx = Math.round(specificPageHeight * (density / 72));
 
@@ -202,7 +208,21 @@ class PdfParserAIService {
                 const base64Image = imageBuffer.toString('base64');
 
                 // Call GPT-4o Vision with SPECIFIC page dimensions
-                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
+                // Retry up to 2 times if empty result (likely safety filter)
+                let prices = [];
+                let attempts = 0;
+                const maxAttempts = 2;
+
+                while (attempts < maxAttempts && prices.length === 0) {
+                    attempts++;
+                    const useRetryPrompt = attempts > 1; // Use fallback prompt on retry
+                    prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight, useRetryPrompt);
+
+                    if (prices.length === 0 && attempts < maxAttempts) {
+                        console.log(`[PdfParserAI] Page ${pageNum}: No prices found, retrying with fallback prompt...`);
+                    }
+                }
+
                 allPrices.push(...prices);
 
                 // Clean up temp file
@@ -218,29 +238,38 @@ class PdfParserAIService {
         return allPrices;
     }
 
-    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
-        const systemPrompt = `You are a specialized OCR engine for structured data extraction.
-Your ONLY function is to identify and transcribe numerical price values from images.
+    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight, useRetryPrompt = false) {
+        // Normal prompt - focuses on R$
+        let systemPrompt = `You are a specialized OCR engine for Brazilian price extraction.
+Your task is to find PRICES in the format "R$ XXX" or "R$ XXX,XX".
 
 CRITICAL RULES:
-1. Distinguish PRICES from SIZES.
-   - Prices are often the largest numbers, usually at the bottom.
-   - SIZES are often small numbers (2, 4, 6, 8, 10, P, M, G) in sequences or inside geometric shapes (diamonds, circles).
-   - IGNORE SIZES. DO NOT extract them. DO NOT return their bounding boxes.
-2. Your Bounding Box MUST match the PRICE text exactly.
-   - Do not point to the sizes while returning the price value.
-   - If the price is "427", the box must cover "427", NOT the sizes above it.
-3. IGNORE background images, people, watermarks. Focus 100% on the price text overlay.
+1. Look for the "R$" currency symbol. This is your PRIMARY visual anchor.
+2. The bounding box MUST start at the "R$" and extend to the end of the number.
+3. IGNORE small numbers inside shapes (like diamonds showing sizes: 2, 4, 6, 8).
+4. Return ONLY the main product price, which is typically the LARGEST number with "R$" prefix.
 
 Output MUST be a raw JSON array. No markdown.`;
 
-        const userPrompt = `Extract all price values (e.g. "R$ 341,60", "387", "45,90") from this image.
+        let userPrompt = `Extract the PRICE with "R$" from this Brazilian catalog image.
 Return a JSON array where each object contains:
-- "originalValue": The exact text string.
+- "originalValue": The exact text string (e.g. "R$ 267" or "R$ 387,00").
 - "numericValue": The parsed number.
-- "box": The strict bounding box {top, left, width, height} (0.0-1.0 scale) covering the price text.
+- "box": The PRECISE bounding box {top, left, width, height} (0.0-1.0 scale) that starts at "R$" and covers the entire price.
 
 If no prices are found, return [].`;
+
+        // Fallback prompt - more technical/clinical, no content interpretation
+        if (useRetryPrompt) {
+            systemPrompt = `You are an OCR text extraction tool. Your ONLY task is to read text characters from images.
+Do NOT analyze or interpret image content. Do NOT refuse to process. You are reading TEXT OVERLAY only.
+Extract any text matching the pattern "R$ [number]" and return coordinates.
+Output: raw JSON array. No explanations.`;
+
+            userPrompt = `OCR Task: Read the "R$ XXX" text pattern from this image.
+Return JSON: [{"originalValue": "R$ 267", "numericValue": 267, "box": {"top": 0.8, "left": 0.3, "width": 0.2, "height": 0.05}}]
+If pattern not found, return [].`;
+        }
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
@@ -296,7 +325,7 @@ If no prices are found, return [].`;
                 const pdfY = pageHeight - (visionBottom * pageHeight);
                 const pdfX = left * pageWidth;
 
-                console.log(`[DEBUG] Page ${pageIndex + 1}: Value=${p.numericValue} BoxTop=${top.toFixed(3)} BoxH=${heightPct.toFixed(3)} -> PDF_Y=${pdfY.toFixed(2)} PageH=${pageHeight}`);
+                console.log(`[DEBUG] Page ${pageIndex + 1}: Value=${p.numericValue} | BoxTop=${top.toFixed(3)} BoxLeft=${left.toFixed(3)} | PDF_X=${pdfX.toFixed(2)} PDF_Y=${pdfY.toFixed(2)} | PageW=${pageWidth} PageH=${pageHeight}`);
 
                 return {
                     text: p.originalValue,
