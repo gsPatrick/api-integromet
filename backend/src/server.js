@@ -93,7 +93,34 @@ app.get('/debug/migrate-legacy', async (req, res) => {
     }
 });
 
-// DEBUG ENDPOINT: Fix old orders
+// DEBUG ENDPOINT: Order stats by campaign
+app.get('/debug/stats', async (req, res) => {
+    try {
+        const Order = require('./models/Order');
+        const Campaign = require('./models/Campaign');
+        const sequelize = require('./config/database');
+
+        const stats = await Order.findAll({
+            attributes: ['campaignId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+            group: ['campaignId'],
+            order: [[sequelize.literal('count'), 'DESC']]
+        });
+
+        const campaigns = await Campaign.findAll();
+        const campaignMap = {};
+        campaigns.forEach(c => campaignMap[c.id] = c.name);
+
+        const enrichedStats = stats.map(s => ({
+            campaignId: s.campaignId,
+            campaignName: campaignMap[s.campaignId] || (s.campaignId === null ? 'Sem Campanha (NULL)' : 'Desconhecida'),
+            count: s.get('count')
+        }));
+
+        res.json(enrichedStats);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 app.get('/debug/fix-orders', async (req, res) => {
     try {
         const Order = require('./models/Order');
