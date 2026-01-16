@@ -309,6 +309,16 @@ class BlingService {
             return response.data;
 
         } catch (error) {
+            const errorData = error.response?.data?.error;
+            // Check for duplicate order error (Code 3: Informações idênticas a última venda salva)
+            const fields = errorData?.fields || [];
+            const isDuplicate = fields.some(f => f.code === 3 || f.msg.includes('Informações idênticas'));
+
+            if (isDuplicate) {
+                console.warn('[BlingService] Order already exists (Duplicate content warning). Treating as success.');
+                return { status: 'DUPLICATE_IGNORED', data: errorData };
+            }
+
             console.error('[BlingService] executeOrder failed:', JSON.stringify(error.response?.data || error.message, null, 2));
             throw error;
         }
