@@ -90,6 +90,7 @@ class CatalogController {
                 console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
 
                 // Save catalog metadata to DB (with pdfPath for markup feature)
+                // Save catalog metadata to DB (with pdfPath for markup feature)
                 await CatalogProduct.create({
                     code: 'CATALOG_META',
                     name: `Catálogo: ${catalogName}`,
@@ -99,6 +100,31 @@ class CatalogController {
                     isActive: true,
                     campaignId: campaignId
                 });
+
+                // EXTRACT PRODUCTS LOCALLY (Text Parse)
+                try {
+                    const textPdfParser = require('../services/textPdfParser.service');
+                    const extractedItems = await textPdfParser.extractProducts(pdfPath);
+                    if (extractedItems.length > 0) {
+                        console.log(`[CatalogController] Extracted ${extractedItems.length} items from Catalog PDF.`);
+
+                        for (const item of extractedItems) {
+                            if (!item.code) continue;
+
+                            await CatalogProduct.upsert({
+                                code: item.code,
+                                name: `Produto ${item.code}`,
+                                price_1_3: item.price,
+                                catalogName: catalogName,
+                                isActive: true,
+                                campaignId: campaignId
+                            });
+                        }
+                        console.log('[CatalogController] Products saved to DB.');
+                    }
+                } catch (parseErr) {
+                    console.error('[CatalogController] Local parse failed:', parseErr);
+                }
 
             } catch (assistError) {
                 console.error('[CatalogController] Assistant upload failed:', assistError.message);
