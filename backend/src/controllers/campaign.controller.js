@@ -1,4 +1,5 @@
 const Campaign = require('../models/Campaign');
+const CatalogProduct = require('../models/CatalogProduct');
 
 exports.createCampaign = async (req, res) => {
     try {
@@ -102,6 +103,17 @@ exports.uploadFiles = async (req, res) => {
                 const filename = path.basename(campaign.visualPdfPath);
                 console.log(`[CampaignController] Syncing Visual PDF to AI: ${filename}`);
                 await catalogAssistant.uploadCatalogPdf(campaign.visualPdfPath, filename);
+
+                // Create Catalog Metadata related to this Campaign
+                await CatalogProduct.create({
+                    code: 'CATALOG_META',
+                    name: `Catálogo: ${campaign.name}`,
+                    category: 'METADATA',
+                    catalogName: filename.replace('.pdf', ''),
+                    pdfPath: campaign.visualPdfPath,
+                    isActive: true,
+                    campaignId: campaign.id
+                });
             }
 
             if (campaign.pricePdfPaths && campaign.pricePdfPaths.length > 0) {
