@@ -245,8 +245,33 @@ class OrderController {
             }
 
             // 5. Generate Asaas payment link
+            // 5. Generate Asaas payment link
             const campaignDescription = await SettingsController.getValue('campaign_description', '');
-            const description = `Pedido ${campaignDescription || 'WhatsApp'} - ${customerName}`;
+
+            // Build detailed description with product names
+            const productNames = orders.map(o => {
+                // Remove campaign suffix if present to save space
+                let name = o.productRaw || 'Produto';
+                if (campaignDescription && name.includes(campaignDescription)) {
+                    name = name.replace(` - ${campaignDescription}`, '').trim();
+                }
+                const qty = o.quantity > 1 ? `(${o.quantity}x) ` : '';
+                return `${qty}${name}`;
+            }).join(', ');
+
+            let description = productNames;
+
+            // Fallback or prefix if empty
+            if (!description) {
+                description = `Pedido ${campaignDescription || 'WhatsApp'} - ${customerName}`;
+            } else {
+                // Add customer ref if needed or just keep products. User asked for "nome do produto".
+                // Asaas description usually appears in the invoice.
+                // Limit length (Asaas limit is 255 chars usually, check API)
+                if (description.length > 250) {
+                    description = description.substring(0, 247) + '...';
+                }
+            }
 
             const asaasResult = await asaasService.generatePaymentLink({
                 customerName,
