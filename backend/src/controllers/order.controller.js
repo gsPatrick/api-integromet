@@ -506,6 +506,7 @@ ${itemLines.join('\n')}
             // Context determination
             let context = '';
             if (order.campaignId === 12) context = 'Fantástico Planeta Precoce';
+            if (order.campaignId === 11) context = 'Lili Sampedro Jan 26';
 
             // Call AI with full analysis context
             // Pass original message and product raw
