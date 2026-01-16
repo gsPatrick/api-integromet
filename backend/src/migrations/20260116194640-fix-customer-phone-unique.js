@@ -4,21 +4,19 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     const transaction = await queryInterface.sequelize.transaction();
     try {
-      // First ensure the column is the right type
+      // 1. Ensure column is the right type
       await queryInterface.changeColumn('customer_bling_mappings', 'customerPhone', {
         type: Sequelize.STRING(255),
         allowNull: false
       }, { transaction });
 
-      // Add unique constraint manually safely
-      // We first try to remove it if it exists by a known name to ensure idempotency
-      try {
-        await queryInterface.removeConstraint('customer_bling_mappings', 'unique_customer_phone_mapping', { transaction });
-      } catch (e) {
-        // Ignore removal error
-      }
+      // 2. Remove constraint safely using Raw SQL (Postgres specific) to avoid transaction aborts
+      await queryInterface.sequelize.query(
+        'ALTER TABLE "customer_bling_mappings" DROP CONSTRAINT IF EXISTS "unique_customer_phone_mapping";',
+        { transaction }
+      );
 
-      // Add it
+      // 3. Add Unique Constraint
       await queryInterface.addConstraint('customer_bling_mappings', {
         fields: ['customerPhone'],
         type: 'unique',
@@ -29,13 +27,11 @@ module.exports = {
       await transaction.commit();
     } catch (error) {
       await transaction.rollback();
-      // If error is "relation already exists" or similar for constraint, we can maybe ignore
-      // But let's throw to be safe unless it's strictly about existence
-      if (error.original && error.original.code === '42710') { // duplicate_object
-        console.warn('Constraint already exists, skipping.');
-      } else {
-        throw error;
-      }
+      console.error('Migration failed:', error);
+
+      // If error is strictly about duplicate objects despite our best efforts, we warn but don't fail hard to allow start?
+      // No, let's fail to ensure integrity, user can manual fix if needed.
+      throw error;
     }
   },
 
