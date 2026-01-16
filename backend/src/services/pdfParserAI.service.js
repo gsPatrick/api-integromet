@@ -203,26 +203,12 @@ class PdfParserAIService {
 
                 // DEBUG: Check Image Dimensions
                 const metadata = await sharp(imageBuffer).metadata();
-                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.width} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
+                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.height} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
 
                 const base64Image = imageBuffer.toString('base64');
 
                 // Call GPT-4o Vision with SPECIFIC page dimensions
-                // Retry up to 2 times if empty result (safety filter may give different result on retry)
-                let prices = [];
-                let attempts = 0;
-                const maxAttempts = 2;
-
-                while (attempts < maxAttempts && prices.length === 0) {
-                    attempts++;
-                    prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
-
-                    if (prices.length === 0 && attempts < maxAttempts) {
-                        console.log(`[PdfParserAI] Page ${pageNum}: No prices found, retrying (attempt ${attempts + 1})...`);
-                        await new Promise(r => setTimeout(r, 1000)); // Small delay before retry
-                    }
-                }
-
+                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
                 allPrices.push(...prices);
 
                 // Clean up temp file
@@ -239,24 +225,28 @@ class PdfParserAIService {
     }
 
     async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
-        const systemPrompt = `You are a specialized OCR engine for Brazilian price extraction.
-Your task is to find PRICES in the format "R$ XXX" or "R$ XXX,XX".
+        const systemPrompt = `You are an OCR assistant that extracts price information from product catalog images.
+Analyze the entire image and find the product price (usually formatted as "R$ XXX" or "R$ XXX,XX").
+Return a JSON array with the price value and its exact bounding box coordinates.`;
 
-CRITICAL RULES:
-1. Look for the "R$" currency symbol. This is your PRIMARY visual anchor.
-2. The bounding box MUST start at the "R$" and extend to the end of the number.
-3. IGNORE small numbers inside shapes (like diamonds showing sizes: 2, 4, 6, 8).
-4. Return ONLY the main product price, which is typically the LARGEST number with "R$" prefix.
+        const userPrompt = `Find the product price in this image and return its location.
 
-Output MUST be a raw JSON array. No markdown.`;
+Return a JSON array:
+[
+  {
+    "originalValue": "R$ 267",
+    "numericValue": 267,
+    "box": {
+      "top": 0.85,
+      "left": 0.30,
+      "width": 0.40,
+      "height": 0.08
+    }
+  }
+]
 
-        const userPrompt = `Extract the PRICE with "R$" from this Brazilian catalog image.
-Return a JSON array where each object contains:
-- "originalValue": The exact text string (e.g. "R$ 267" or "R$ 387,00").
-- "numericValue": The parsed number.
-- "box": The PRECISE bounding box {top, left, width, height} (0.0-1.0 scale) that starts at "R$" and covers the entire price.
-
-If no prices are found, return [].`;
+- "box" coordinates are relative (0.0 to 1.0) where top-left is (0,0).
+- Return [] if no price is found.`;
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
