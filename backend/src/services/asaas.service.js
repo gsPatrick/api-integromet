@@ -134,7 +134,7 @@ class AsaasService {
      * @param {string} description - Description
      * @returns {object} - { id, invoiceUrl }
      */
-    async createPaymentLink(orderId, value, name, description) {
+    async createPaymentLink(orderId, value, name, description, maxInstallmentCount) {
         try {
             const headers = await this.getHeaders();
             const dueDateLimitDays = 3;
@@ -147,6 +147,7 @@ class AsaasService {
                 billingType: 'UNDEFINED',
                 chargeType: 'DETACHED',   // One-time charge
                 dueDateLimitDays: dueDateLimitDays,
+                maxInstallmentCount: maxInstallmentCount || 1
             };
 
             console.log(`[Asaas] Creating Payment Link (Checkout V3): R$ ${value} - ${payload.name}`);
@@ -187,7 +188,8 @@ class AsaasService {
             orderId,
             totalValue,
             name,
-            description || `Pedido no WhatsApp`
+            description || `Pedido no WhatsApp`,
+            orderData.maxInstallmentCount
         );
 
         return {
