@@ -256,10 +256,9 @@ class BlingService {
                 // Just use productRaw as description. It is usually well formatted by Webhook.
                 let customDesc = order.productRaw || 'Produto WhatsApp';
 
-                // Only append suffix if it's NOT already there
-                if (campaignDescription && !customDesc.includes(campaignDescription)) {
-                    customDesc += ` - ${campaignDescription}`;
-                }
+                // Removed logic that appended global campaign suffix here.
+                // We trust WebhookController to have already formatted productRaw correctly with the specific campaign context.
+                // Appending global setting here causes "Double Campaign" names (e.g. "Skip Hop - Precoce").
 
                 const itemPayload = {
                     descricao: customDesc,

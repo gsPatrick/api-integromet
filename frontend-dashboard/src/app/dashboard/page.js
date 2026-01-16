@@ -5,7 +5,8 @@ import api from '../../services/api';
 import OrderCard from '../../components/orders/OrderCard/OrderCard';
 import EditModal from '../../components/orders/EditModal/EditModal';
 import MessagePreviewModal from '../../components/orders/MessagePreviewModal/MessagePreviewModal';
-import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2, MessageSquare, Filter, Check, Clock } from 'lucide-react';
+import { Package, RefreshCw, Inbox, Phone, ChevronDown, ChevronUp, CheckSquare, Square, Loader2, MessageSquare, Filter, Check, Clock, ArrowRight, Trash2 } from 'lucide-react';
+import MoveCampaignModal from '../../components/orders/MoveCampaignModal/MoveCampaignModal';
 
 export default function Dashboard() {
     const [orders, setOrders] = useState([]);
@@ -16,6 +17,8 @@ export default function Dashboard() {
     const [syncing, setSyncing] = useState(null); // phone of customer currently syncing
     const [previewData, setPreviewData] = useState(null); // { group, selectedIds }
     const [syncFilter, setSyncFilter] = useState('all'); // 'all', 'pending', 'synced'
+    const [moveData, setMoveData] = useState(null); // { selectedIds: [] }
+    const [isValidating, setIsValidating] = useState(false);
 
     // Campaign Filter
     const [selectedCampaignId, setSelectedCampaignId] = useState('');
@@ -169,6 +172,42 @@ export default function Dashboard() {
     };
 
     // Open Confirmation Preview
+    const handleMoveCampaign = (group) => {
+        const selectedIds = getSelectedIdsForCustomer(group);
+        if (selectedIds.length === 0) return alert('Selecione pedidos para mover.');
+        setMoveData({ selectedIds });
+    };
+
+    const getSelectedIds = () => {
+        return Object.keys(selectedOrders).filter(id => selectedOrders[id]);
+    };
+
+    const handleValidateSelected = async () => {
+        const ids = getSelectedIds();
+        if (ids.length === 0) return;
+
+        if (!confirm(`Deseja validar ${ids.length} pedidos com a IA do Catálogo? Isso pode verificar preços, códigos e descrições.`)) return;
+
+        setIsValidating(true);
+        let updatedCount = 0;
+
+        // Process sequentially to be safe
+        for (const id of ids) {
+            try {
+                const res = await api.post(`/orders/${id}/validate`);
+                if (res.data.success && res.data.updated) {
+                    updatedCount++;
+                }
+            } catch (error) {
+                console.error(`Erro ao validar pedido ${id}:`, error);
+            }
+        }
+
+        setIsValidating(false);
+        alert(`Processo finalizado! ${updatedCount} pedidos foram corrigidos.`);
+        fetchOrders();
+        setSelectedOrders({}); // Clear selection
+    };
     const handleSendConfirmation = (group) => {
         const selectedIds = getSelectedIdsForCustomer(group);
 
@@ -231,7 +270,7 @@ export default function Dashboard() {
                         color: selectedCampaignId ? '#e67e22' : '#2d3436',
                         fontSize: '0.875rem'
                     }}>
-                        {selectedCampaignName}
+                        {selectedCampaignName?.split(' ou ')[0] || selectedCampaignName}
                     </span>
                 </div>
 
@@ -407,6 +446,28 @@ export default function Dashboard() {
                                                 </button>
                                             )}
 
+                                            {selectedCount > 0 && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setMoveData({ selectedIds: getSelectedIdsForCustomer(group) }); }}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        borderRadius: '8px',
+                                                        border: 'none',
+                                                        background: '#8e44ad', // Purple
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px'
+                                                    }}
+                                                >
+                                                    <ArrowRight size={14} />
+                                                    Mover Selecionados
+                                                </button>
+                                            )}
+
                                             {/* Sync Selected Button */}
                                             {selectedCount > 0 && (
                                                 <button
@@ -530,6 +591,122 @@ export default function Dashboard() {
                         alert(`Sucesso! Mensagem enviada para o cliente.`);
                     }}
                 />
+            )}
+
+            {/* Move Modal */}
+            {moveData && (
+                <MoveCampaignModal
+                    selectedIds={moveData.selectedIds}
+                    onClose={() => setMoveData(null)}
+                    onSuccess={() => {
+                        setMoveData(null);
+                        alert('Pedidos movidos com sucesso!');
+                        fetchOrders();
+                    }}
+                />
+            )}
+
+            {/* Global Actions Bar */}
+            {getSelectedIds().length > 0 && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'white',
+                    padding: '12px 24px',
+                    borderRadius: '50px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    zIndex: 1000,
+                    border: '1px solid #dfe6e9'
+                }}>
+                    <span style={{ fontWeight: 600, color: '#2d3436' }}>
+                        {getSelectedIds().length} selecionados
+                    </span>
+
+                    <div style={{ height: '24px', width: '1px', background: '#dfe6e9' }} />
+
+                    <button
+                        onClick={handleValidateSelected}
+                        disabled={isValidating}
+                        style={{
+                            background: '#6c5ce7',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontWeight: 600,
+                            opacity: isValidating ? 0.7 : 1
+                        }}
+                    >
+                        {isValidating ? <Loader2 className="animate-spin" size={16} /> : <CheckSquare size={16} />}
+                        Validar (AI)
+                    </button>
+
+                    <button
+                        onClick={() => setMoveData({ selectedIds: getSelectedIds() })}
+                        disabled={isValidating}
+                        style={{
+                            background: '#00b894',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontWeight: 600
+                        }}
+                    >
+                        <ArrowRight size={16} />
+                        Mover
+                    </button>
+
+                    <button
+                        onClick={async () => {
+                            const ids = getSelectedIds();
+                            if (ids.length === 0) return;
+                            if (!confirm(`TEM CERTEZA? Deseja EXCLUIR ${ids.length} pedidos? Essa ação não pode ser desfeita.`)) return;
+
+                            setIsValidating(true);
+                            try {
+                                await api.delete('/orders/bulk', { data: { ids } });
+                                alert('Pedidos excluídos com sucesso.');
+                                fetchOrders();
+                                setSelectedOrders({});
+                            } catch (error) {
+                                console.error('Error deleting:', error);
+                                alert('Erro ao excluir: ' + (error.response?.data?.error || error.message));
+                            } finally {
+                                setIsValidating(false);
+                            }
+                        }}
+                        disabled={isValidating}
+                        style={{
+                            background: '#ff7675', // Red
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontWeight: 600
+                        }}
+                    >
+                        <Trash2 size={16} />
+                        Excluir
+                    </button>
+                </div>
             )}
         </div>
     );

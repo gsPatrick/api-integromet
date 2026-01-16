@@ -601,6 +601,7 @@ app.post('/orders/generate-link-sync', orderController.generateLinkSync.bind(ord
 app.get('/orders/:id', orderController.getOrder);
 app.put('/orders/:id', orderController.updateOrder);
 app.post('/orders/:id/sync-bling', orderController.syncOrderToBling.bind(orderController));
+app.delete('/orders/bulk', orderController.deleteOrders.bind(orderController)); // Bulk Delete Endpoint
 app.post('/orders/:id/validate', orderController.validateOrder.bind(orderController));
 app.post('/admin/fix-lili', orderController.fixLili.bind(orderController));
 

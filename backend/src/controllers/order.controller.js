@@ -651,6 +651,36 @@ ${itemLines.join('\n')}
             return res.status(500).json({ error: error.message });
         }
     }
+
+    /**
+     * Delete multiple orders
+     * DELETE /orders/bulk
+     * Body: { ids: [1, 2, 3] }
+     */
+    async deleteOrders(req, res) {
+        try {
+            const { ids } = req.body;
+
+            if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                return res.status(400).json({ error: 'No IDs provided' });
+            }
+
+            const Order = require('../models/Order');
+            const { Op } = require('sequelize');
+
+            const count = await Order.destroy({
+                where: {
+                    id: { [Op.in]: ids }
+                }
+            });
+
+            console.log(`[OrderController] Deleted ${count} orders: [${ids.join(', ')}]`);
+            res.json({ success: true, count, ids });
+        } catch (error) {
+            console.error('[OrderController] Error deleting orders:', error);
+            res.status(500).json({ error: 'Failed to delete orders' });
+        }
+    }
 }
 
 module.exports = new OrderController();
