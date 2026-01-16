@@ -1,5 +1,6 @@
 const Campaign = require('../models/Campaign');
 const CatalogProduct = require('../models/CatalogProduct');
+const textPdfParser = require('../services/textPdfParser.service');
 
 exports.createCampaign = async (req, res) => {
     try {
@@ -114,6 +115,38 @@ exports.uploadFiles = async (req, res) => {
                     isActive: true,
                     campaignId: campaign.id
                 });
+
+                // EXTRACT PRODUCTS LOCALLY (Text Parse)
+                // This populates the DB so Webhook can find products locally
+                try {
+                    const extractedItems = await textPdfParser.extractProducts(campaign.visualPdfPath);
+                    if (extractedItems.length > 0) {
+                        console.log(`[CampaignController] Extracted ${extractedItems.length} items from Visual PDF.`);
+
+                        // Bulk upsert items
+                        for (const item of extractedItems) {
+                            if (!item.code) continue;
+
+                            // Upsert based on Code + Campaign (or just Code if unique globally? Usually unique per campaign)
+                            // For now, assuming Code is unique enough or we overwrite. 
+                            // Ideally we should scope by campaign if needed, but CatalogProduct schema is flat?
+                            // Schema has no campaignId on individual products yet?
+                            // Wait, CatalogProduct schema check...
+
+                            await CatalogProduct.upsert({
+                                code: item.code,
+                                name: `Produto ${item.code}`, // We don't have name from text parser yet, use generic
+                                price_1_3: item.price, // Saving as base price
+                                catalogName: filename.replace('.pdf', ''),
+                                isActive: true,
+                                campaignId: campaign.id // LINK TO CAMPAIGN
+                            });
+                        }
+                        console.log('[CampaignController] Products saved to DB.');
+                    }
+                } catch (parseErr) {
+                    console.error('[CampaignController] Local parse failed:', parseErr);
+                }
             }
 
             if (campaign.pricePdfPaths && campaign.pricePdfPaths.length > 0) {
