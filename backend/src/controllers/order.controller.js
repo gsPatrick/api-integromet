@@ -293,13 +293,25 @@ class OrderController {
             // Asaas name limit check (often 255)
             const finalLinkTitle = linkTitle.length > 250 ? linkTitle.substring(0, 247) + '...' : linkTitle;
 
+            // Apply 5% Surcharge for Credit Card Link (User Requirement)
+            const surchargedValue = totalValue * 1.05;
+
+            // Calculate Max Installments (Min installment R$ 100)
+            let maxInstallmentCount = Math.floor(surchargedValue / 100);
+            if (maxInstallmentCount < 1) maxInstallmentCount = 1;
+            // Cap at 12
+            if (maxInstallmentCount > 12) maxInstallmentCount = 12;
+
+            console.log(`[OrderController] Value: ${totalValue.toFixed(2)} -> Surcharged (+5%): ${surchargedValue.toFixed(2)} | Max Installments: ${maxInstallmentCount}`);
+
             const asaasResult = await asaasService.generatePaymentLink({
                 customerName,
                 customerPhone,
                 orderId: mainOrder.id, // Use first order ID as reference
-                totalValue,
+                totalValue: surchargedValue,
                 description,
-                linkName: finalLinkTitle // Pass explicit name
+                linkName: finalLinkTitle,
+                maxInstallmentCount: maxInstallmentCount
             });
 
             // 6. Update all orders with payment info
