@@ -28,15 +28,29 @@ async function fixNamesViaApi() {
         for (const order of orders) {
             if (!order.productRaw) continue;
 
-            if (order.productRaw.includes(WRONG_SUFFIX)) {
+            const dirty = order.productRaw.includes(WRONG_SUFFIX) ||
+                order.productRaw.toLowerCase().includes('campanha teste');
+
+            if (dirty) {
                 let newName = order.productRaw;
 
                 // Correction Logic
-                // 1. Remove recursive " ou Lili..."
+                // 1. Remove recursive " ou Lili..." or " ou campanha teste"
                 newName = newName.replace(/ ou campanha teste/gi, '');
+                newName = newName.replace(/ - campanha teste/gi, '');
                 newName = newName.replace(/ ou Lili Sampedro Jan 26/g, '');
-                // 2. Replace main occurrence
+                newName = newName.replace(/ - Lili Sampedro Jan 26/g, ' - Precoce Jan 26');
+
+                // 2. Replace main occurrence if it still remains
                 newName = newName.replace(/Lili Sampedro Jan 26/g, CORRECT_SUFFIX_TEXT);
+
+                // 3. Clean up double separators if/when they happen
+                // " - - " -> " - "
+                newName = newName.replace(/ - - /g, ' - ');
+                newName = newName.replace(/ -  - /g, ' - ');
+
+                // 4. Remove trailing " - " if it happened
+                if (newName.endsWith(' - ')) newName = newName.substring(0, newName.length - 3);
 
                 if (newName !== order.productRaw) {
                     console.log(`[Order ${order.id}] Renaming: \n   FROM: ${order.productRaw}\n   TO:   ${newName}`);

@@ -223,14 +223,13 @@ class BlingService {
                     descricao: customDesc,
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
-                    unidade: 'UN'
+                    unidade: 'UN',
+                    codigo: sku  // Always use SKU, don't link product ID to preserve custom description
                 };
 
-                if (product && product.id) {
-                    itemPayload.produto = { id: product.id };
-                } else {
-                    itemPayload.codigo = sku;
-                }
+                // Note: We intentionally DON'T link produto.id because Bling overrides 
+                // the descricao field with the product's registered name when linked.
+                // By using only codigo + descricao, the order will show the full productRaw.
 
                 orderItems.push(itemPayload);
             }
