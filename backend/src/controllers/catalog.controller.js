@@ -131,8 +131,22 @@ class CatalogController {
      */
     async getStatus(req, res) {
         try {
-            const totalProducts = await CatalogProduct.count({ where: { isActive: true } });
+            const { campaignId } = req.query;
+            const where = { isActive: true };
+
+            if (campaignId) {
+                where.campaignId = parseInt(campaignId);
+            } else {
+                // If no campaign selected, optionally show all or filter by active campaigns.
+                // Consistent with other endpoints: show all active.
+                const activeCampaigns = await Campaign.findAll({ where: { isActive: true } });
+                const activeIds = activeCampaigns.map(c => c.id);
+                where.campaignId = { [Op.in]: activeIds };
+            }
+
+            const totalProducts = await CatalogProduct.count({ where });
             const catalogs = await CatalogProduct.findAll({
+                where,
                 attributes: ['catalogName'],
                 group: ['catalogName']
             });
