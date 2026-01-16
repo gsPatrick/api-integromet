@@ -53,6 +53,7 @@ exports.updateCampaign = async (req, res) => {
         if (startDate !== undefined) campaign.startDate = startDate;
         if (endDate !== undefined) campaign.endDate = endDate;
         if (req.body.targetGroups !== undefined) campaign.targetGroups = req.body.targetGroups;
+        if (req.body.markupPercentage !== undefined) campaign.markupPercentage = req.body.markupPercentage;
 
         await campaign.save();
         return res.json(campaign);

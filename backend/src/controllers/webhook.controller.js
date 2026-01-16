@@ -173,7 +173,7 @@ class WebhookController {
         if (candidates.length > 0) {
             primaryCampaign = candidates[0]; // Most recent
             campaignId = primaryCampaign.id;
-            markupPercentage = primaryCampaign.markupPercentage || 35;
+            markupPercentage = primaryCampaign.markupPercentage ?? 35;
             collectionName = primaryCampaign.name;
 
             if (candidates.length > 1) {
@@ -195,7 +195,7 @@ class WebhookController {
             if (defaultCampaign) {
                 primaryCampaign = defaultCampaign;
                 campaignId = defaultCampaign.id;
-                markupPercentage = defaultCampaign.markupPercentage || 35;
+                markupPercentage = defaultCampaign.markupPercentage ?? 35;
                 collectionName = defaultCampaign.name;
                 console.log(`[Webhook] Using default campaign: "${defaultCampaign.name}" (ID: ${defaultCampaign.id})`);
             } else {
@@ -228,7 +228,7 @@ class WebhookController {
                         if (lookup) {
                             catalogPrice = parseFloat(lookup);
                             campaignId = cand.id; // Correctly assign order to THIS campaign
-                            markupPercentage = cand.markupPercentage || 35; // Update markup to match this campaign
+                            markupPercentage = cand.markupPercentage ?? 35; // Update markup to match this campaign
                             console.log(`[Webhook] Found in Campaign "${cand.name}"! Price: R$${catalogPrice}`);
                             break; // Stop looking
                         }
@@ -290,7 +290,7 @@ class WebhookController {
                                 const exists = await CatalogController.getProductPrice(bestMatch.codigo, null, cand.id);
                                 if (exists) {
                                     campaignId = cand.id;
-                                    markupPercentage = cand.markupPercentage || 35;
+                                    markupPercentage = cand.markupPercentage ?? 35;
                                     collectionName = cand.name;
                                     console.log(`[Webhook] AI matched product code ${bestMatch.codigo} validated in Campaign "${cand.name}". Switching context.`);
                                     break;
