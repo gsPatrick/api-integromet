@@ -265,10 +265,11 @@ class BlingService {
                     descricao: customDesc,
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
-                    unidade: 'UN',
-                    // Only send codigo if it's a REAL SKU (not virtual). 
-                    // Virtual items are sent as text-only to preserve description and avoid validation issues.
-                    codigo: isVirtualSku ? undefined : sku
+                    unidade: 'UN'
+                    // NEVER send 'codigo' to Bling for these items.
+                    // If we send 'codigo' and it matches an existing product, Bling validation fails with "Code already exists" 
+                    // unless we link the product ID. But if we link the product ID, Bling OVERRIDES our custom description.
+                    // The only way to have custom description AND avoid validation errors is to send NO code (generic item).
                 };
 
                 // Note: We intentionally DON'T link produto.id because Bling overrides 
