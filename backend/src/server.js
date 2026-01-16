@@ -93,6 +93,49 @@ app.get('/debug/migrate-legacy', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Fix product names for Precoce
+app.get('/debug/fix-names', async (req, res) => {
+    try {
+        const Order = require('./models/Order');
+        const { Op } = require('sequelize');
+
+        const TARGET_CAMPAIGN_ID = 12;
+        const WRONG_SUFFIX = 'Lili Sampedro Jan 26';
+        const CORRECT_SUFFIX_TEXT = 'Precoce Jan 26';
+
+        const orders = await Order.findAll({
+            where: {
+                campaignId: TARGET_CAMPAIGN_ID,
+                productRaw: { [Op.like]: `%${WRONG_SUFFIX}%` }
+            }
+        });
+
+        let updatedCount = 0;
+        const details = [];
+
+        for (const order of orders) {
+            let newName = order.productRaw;
+            // Remove duplications " ou Lili..."
+            newName = newName.replace(/ ou Lili Sampedro Jan 26/g, '');
+            // Replace main one
+            newName = newName.replace(/Lili Sampedro Jan 26/g, CORRECT_SUFFIX_TEXT);
+
+            // Should resulted in ".... - Precoce Jan 26"
+
+            if (newName !== order.productRaw) {
+                await order.update({ productRaw: newName });
+                updatedCount++;
+                details.push({ old: order.productRaw, new: newName });
+            }
+        }
+
+        res.json({ success: true, updatedCount, details });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Order stats by campaign
 app.get('/debug/stats', async (req, res) => {
     try {
