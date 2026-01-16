@@ -325,62 +325,91 @@ app.get('/debug/bling-clients', async (req, res) => {
 // BLING CLIENT MAPPING ENDPOINTS
 // =========================================================================
 
-// Search Bling clients by phone for the selection modal
+// Search Bling clients by phone OR term for the selection modal
 app.get('/bling/clients/search', async (req, res) => {
     try {
         const blingService = require('./services/bling.service');
         const axios = require('axios');
-        const phone = req.query.phone;
+        const { phone, term } = req.query;
 
-        if (!phone) {
-            return res.status(400).json({ error: 'phone query param required' });
-        }
-
-        // Normalize phone (remove 55 prefix if present)
-        let searchPhone = phone.replace(/\D/g, '');
-        if (searchPhone.startsWith('55')) {
-            searchPhone = searchPhone.substring(2);
+        if (!phone && !term) {
+            return res.status(400).json({ error: 'phone or term query param required' });
         }
 
         const token = await blingService.getValidToken();
-
-        // Search with multiple variations
-        const variations = [
-            searchPhone,
-            searchPhone.slice(-8), // Last 8 digits
-            searchPhone.slice(-10), // Last 10 digits
-        ];
-
         const foundClients = new Map(); // Use Map to avoid duplicates
 
-        for (const variation of variations) {
-            await new Promise(r => setTimeout(r, 350));
-
+        // 1. Search by Term (Name, CPF, Email, manual Phone)
+        if (term) {
             try {
                 const response = await axios.get(
-                    `https://api.bling.com.br/Api/v3/contatos?pesquisa=${encodeURIComponent(variation)}`,
+                    `https://api.bling.com.br/Api/v3/contatos?pesquisa=${encodeURIComponent(term)}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
 
                 const clients = response.data.data || [];
                 for (const c of clients) {
-                    if (!foundClients.has(c.id)) {
-                        foundClients.set(c.id, {
-                            id: c.id,
-                            nome: c.nome,
-                            cpfCnpj: c.numeroDocumento || '',
-                            telefone: c.telefone || '',
-                            celular: c.celular || ''
-                        });
-                    }
+                    foundClients.set(c.id, {
+                        id: c.id,
+                        nome: c.nome,
+                        cpfCnpj: c.numeroDocumento || '',
+                        telefone: c.telefone || '',
+                        celular: c.celular || '',
+                        email: c.email || ''
+                    });
                 }
             } catch (err) {
-                // Continue on error
+                console.error('[BlingClientSearch] Term search error:', err.message);
+            }
+        }
+
+        // 2. Search by Phone (Automated variations)
+        if (phone) {
+            // Normalize phone (remove 55 prefix if present)
+            let searchPhone = phone.replace(/\D/g, '');
+            if (searchPhone.startsWith('55')) {
+                searchPhone = searchPhone.substring(2);
+            }
+
+            // Search with multiple variations because Bling search is fuzzy/strict depends on field
+            const variations = [
+                searchPhone,
+                searchPhone.slice(-8), // Last 8 digits
+                searchPhone.slice(-10), // Last 10 digits
+            ];
+
+            for (const variation of variations) {
+                // Rate limit slightly
+                await new Promise(r => setTimeout(r, 200));
+
+                try {
+                    const response = await axios.get(
+                        `https://api.bling.com.br/Api/v3/contatos?pesquisa=${encodeURIComponent(variation)}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    const clients = response.data.data || [];
+                    for (const c of clients) {
+                        if (!foundClients.has(c.id)) {
+                            foundClients.set(c.id, {
+                                id: c.id,
+                                nome: c.nome,
+                                cpfCnpj: c.numeroDocumento || '',
+                                telefone: c.telefone || '',
+                                celulares: c.celular || '',
+                                email: c.email || ''
+                            });
+                        }
+                    }
+                } catch (err) {
+                    // Continue on error
+                }
             }
         }
 
         res.json({
-            phone: searchPhone,
+            term,
+            phone,
             totalResults: foundClients.size,
             clients: Array.from(foundClients.values())
         });

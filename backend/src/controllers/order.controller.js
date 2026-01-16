@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const blingService = require('../services/bling.service');
+const catalogAssistant = require('../services/catalogAssistant.service');
 
 class OrderController {
 
@@ -485,6 +486,107 @@ ${itemLines.join('\n')}
         } catch (error) {
             console.error('[OrderController] Error moving orders:', error);
             return res.status(500).json({ error: 'Erro ao mover pedidos: ' + error.message });
+        }
+    }
+    /**
+     * Valida um pedido usando a IA e o catálogo
+     * POST /orders/:id/validate
+     */
+    async validateOrder(req, res) {
+        try {
+            const { id } = req.params;
+            const order = await Order.findByPk(id);
+
+            if (!order) {
+                return res.status(404).json({ error: 'Pedido não encontrado' });
+            }
+
+            console.log(`[OrderValidator] Validating Order #${id} - ${order.customerName}`);
+
+            // Context determination
+            let context = '';
+            if (order.campaignId === 12) context = 'Fantástico Planeta Precoce';
+
+            // Call AI with full analysis context
+            // Pass original message and product raw
+            const aiResult = await catalogAssistant.analyzeOrder(
+                order.originalMessage || '',
+                order.productRaw || '',
+                context
+            );
+
+            const updates = {};
+            const logs = [];
+
+            if (aiResult.found && aiResult.product) {
+                const p = aiResult.product;
+                logs.push(`AI: ${p.code} - ${p.name} | R$ ${p.price}`);
+                if (p.size) logs.push(` Tamanho: ${p.size}`);
+                if (p.color) logs.push(` Cor: ${p.color}`);
+
+                // 1. Validate Price
+                const currentPrice = parseFloat(order.sellPrice || 0);
+                const catalogPrice = parseFloat(p.price || 0);
+
+                if (catalogPrice > 0 && Math.abs(currentPrice - catalogPrice) > 0.01) {
+                    updates.sellPrice = catalogPrice;
+                    updates.catalogPrice = catalogPrice;
+                    logs.push(`Preço corrigido: R$ ${currentPrice} -> R$ ${catalogPrice}`);
+                }
+
+                // 2. Validate Name/Code
+                const currentName = order.productRaw || '';
+                // If AI returns a code, ensure it's in the name
+                if (p.code && !currentName.includes(p.code)) {
+                    updates.productRaw = `${p.code} - ${p.name || currentName}`;
+                    logs.push(`Nome normalizado: ${updates.productRaw}`);
+                } else if (p.name && (!currentName || currentName.length < 5 || currentName.includes('WhatsApp'))) {
+                    updates.productRaw = `${p.code ? p.code + ' - ' : ''}${p.name}`;
+                }
+
+                // 3. Validate Variables (Size/Color)
+                if (p.size && p.size !== order.extractedSize) {
+                    updates.extractedSize = p.size;
+                    logs.push(`Tamanho: ${order.extractedSize || '(vazio)'} -> ${p.size}`);
+                }
+
+                if (p.color && p.color !== order.extractedColor) {
+                    updates.extractedColor = p.color;
+                    logs.push(`Cor: ${order.extractedColor || '(vazio)'} -> ${p.color}`);
+                }
+
+                if (p.colorCode && p.colorCode !== order.extractedColorCode) {
+                    updates.extractedColorCode = p.colorCode;
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await order.update(updates);
+                    return res.json({
+                        success: true,
+                        updated: true,
+                        logs,
+                        order: await order.reload()
+                    });
+                } else {
+                    return res.json({
+                        success: true,
+                        updated: false,
+                        logs: ['Dados validados e já estavam corretos.'],
+                        order
+                    });
+                }
+            } else {
+                return res.json({
+                    success: false,
+                    updated: false,
+                    logs: ['Produto não identificado no catálogo com confiança suficiente.'],
+                    aiResponse: aiResult
+                });
+            }
+
+        } catch (error) {
+            console.error('Error validating order:', error);
+            return res.status(500).json({ error: error.message });
         }
     }
 }

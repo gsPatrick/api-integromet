@@ -193,6 +193,73 @@ class CatalogAssistantService {
             return { encontrado: false, error: run.status };
         }
     }
+    /**
+     * Analyzes an order message against the catalog to extract standardized data
+     */
+    async analyzeOrder(message, productHint, context = '') {
+        await this.initialize();
+        console.log(`[CatalogAssistant] Analyzing order: "${message}" | Hint: ${productHint}`);
+
+        const prompt = `CONTEXTO: Você é um especialista em pedidos de moda.
+        PEDIDO DO CLIENTE: "${message}"
+        PRODUTO INICIALMENTE IDENTIFICADO: "${productHint}"
+        COLEÇÃO/CATÁLOGO ALVO: "${context}"
+
+        TAREFA:
+        1. Consulte os arquivos de catálogo (Vector Store) para identificar EXATAMENTE qual é o produto (Código e Nome).
+           - Tente corrigir nomes incompletos.
+           - Busque pelo código (ex: M2CJ 5958) se estiver disponível.
+        2. Analise a mensagem do cliente para extrair TAMANHO e COR/VARIANTE desejados.
+        3. Encontre o PREÇO correto para essa variante no catálogo. Se houver tabela de preços, use-a.
+
+        Saída JSON Obrigatória:
+        {
+            "found": true,
+            "product": {
+                "code": "Código Ref (ex: M2CJ 5958)",
+                "name": "Nome Oficial do Produto no Catálogo",
+                "price": 123.45 (Number, use ponto para decimais),
+                "size": "Tamanho padronizado (ex: 4, 6, P, M)",
+                "color": "Cor extraída",
+                "colorCode": "Código da cor (se houver)"
+            },
+            "confidence": "high/medium/low",
+            "notes": "Explicação curta"
+        }
+
+        Se não encontrar o produto no catálogo com certeza, retorne "found": false.
+        `;
+
+        try {
+            const thread = await this.openai.beta.threads.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ]
+            });
+
+            const run = await this.openai.beta.threads.runs.createAndPoll(
+                thread.id,
+                { assistant_id: this.assistantId }
+            );
+
+            if (run.status === 'completed') {
+                const messages = await this.openai.beta.threads.messages.list(thread.id);
+                const responseText = messages.data[0].content[0].text.value;
+
+                const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    return JSON.parse(jsonMatch[0]);
+                }
+            }
+            return { found: false, error: run.status };
+        } catch (e) {
+            console.error('[CatalogAssistant] Analyze Error:', e);
+            return { found: false, error: e.message };
+        }
+    }
 }
 
 module.exports = new CatalogAssistantService();

@@ -83,70 +83,82 @@ class CatalogController {
 
             console.log(`[CatalogController] Processing PDF: ${catalogName} (Campaign ID: ${campaignId})`);
 
-            // 1. Upload to OpenAI Assistant Vector Store
+            // 1. Upload to OpenAI Assistant Vector Store (Critical)
             try {
                 console.log('[CatalogController] Uploading to OpenAI Assistant...');
                 await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
                 console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
+            } catch (assistError) {
+                console.error('[CatalogController] Assistant upload failed:', assistError);
+                return res.status(500).json({ error: 'Failed to upload to OpenAI: ' + assistError.message });
+            }
 
-                // Save catalog metadata to DB (with pdfPath for markup feature)
-                // Save catalog metadata to DB (with pdfPath for markup feature)
+            // 2. Save Metadata
+            try {
                 await CatalogProduct.create({
                     code: 'CATALOG_META',
                     name: `Catálogo: ${catalogName}`,
                     category: 'METADATA',
                     catalogName: catalogName,
-                    pdfPath: pdfPath, // Keep path for markup generation
+                    pdfPath: pdfPath,
                     isActive: true,
                     campaignId: campaignId
                 });
-
-                // EXTRACT PRODUCTS LOCALLY (Text Parse)
-                try {
-                    const textPdfParser = require('../services/textPdfParser.service');
-                    const extractedItems = await textPdfParser.extractProducts(pdfPath);
-                    if (extractedItems.length > 0) {
-                        console.log(`[CatalogController] Extracted ${extractedItems.length} items from Catalog PDF.`);
-
-                        for (const item of extractedItems) {
-                            if (!item.code) continue;
-
-                            await CatalogProduct.upsert({
-                                code: item.code,
-                                name: `Produto ${item.code}`,
-                                price_1_3: item.price,
-                                catalogName: catalogName,
-                                isActive: true,
-                                campaignId: campaignId
-                            });
-                        }
-                        console.log('[CatalogController] Products saved to DB.');
-                    }
-                } catch (parseErr) {
-                    console.error('[CatalogController] Local parse failed:', parseErr);
-                }
-
-            } catch (assistError) {
-                console.error('[CatalogController] Assistant upload failed:', assistError.message);
-                // If assistant upload fails, we should probably error out since it's now our main source
-                return res.status(500).json({ error: 'Falha ao enviar para OpenAI Assistant: ' + assistError.message });
+            } catch (metaError) {
+                console.warn('[CatalogController] Metadata creation warning:', metaError.message);
             }
 
-            // NOTE: PDF file is kept in public/uploads/catalogs for markup generation
-            // It is NOT deleted after upload
+            // 3. Trigger Background Extraction for Local DB
+            // Using PdfParserAIService
+            (async () => {
+                try {
+                    const PdfParserAIService = require('../services/pdfParserAI.service');
+                    const parser = new PdfParserAIService();
+                    const buffer = fs.readFileSync(pdfPath);
+
+                    console.log(`[CatalogController] Extracting products locally for ${catalogName}...`);
+                    const productsMap = await parser.parsePricePdf(buffer);
+
+                    let savedCount = 0;
+                    for (const [code, variants] of productsMap) {
+                        if (!variants || variants.length === 0) continue;
+                        const price = variants[0].price;
+
+                        // Check Duplicate
+                        const existing = await CatalogProduct.findOne({
+                            where: { code, campaignId }
+                        });
+
+                        if (existing) {
+                            await existing.update({ price, catalogName, isActive: true });
+                        } else {
+                            await CatalogProduct.create({
+                                code,
+                                name: `${catalogName} - Ref ${code}`,
+                                price,
+                                catalogName,
+                                campaignId,
+                                isActive: true,
+                                category: 'Imported'
+                            });
+                        }
+                        savedCount++;
+                    }
+                    console.log(`[CatalogController] Local extraction saved ${savedCount} products.`);
+                } catch (bgError) {
+                    console.error('[CatalogController] Background extraction failed:', bgError);
+                }
+            })();
 
             res.json({
                 success: true,
-                message: 'Catálogo enviado para IA com sucesso!',
+                message: 'Catálogo enviado para IA. Processamento local iniciado em segundo plano.',
                 catalogName,
-                pdfPath: pdfPath, // Return path for frontend reference
-                pagesProcessed: 0,
-                productsFound: 0,
-                products: []
+                pdfPath
             });
 
         } catch (error) {
-            console.error('[CatalogController] PDF upload error:', error);
+            console.error('[CatalogController] General error:', error);
             res.status(500).json({ error: 'Failed to process PDF: ' + error.message });
         }
     }
