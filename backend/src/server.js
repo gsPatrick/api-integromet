@@ -58,6 +58,41 @@ app.put('/settings', settingsController.update);
 app.get('/customers', CustomerController.listCustomers);
 app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
 
+// DEBUG ENDPOINT: Migrate legacy orders
+app.get('/debug/migrate-legacy', async (req, res) => {
+    try {
+        const Campaign = require('./models/Campaign');
+        const Order = require('./models/Order');
+
+        // 1. Create/Find Legado
+        const [legacyCampaign, created] = await Campaign.findOrCreate({
+            where: { name: 'Legado' },
+            defaults: {
+                name: 'Legado',
+                description: 'Pedidos antigos antes da separação de campanhas',
+                isActive: true,
+                isDefault: false
+            }
+        });
+
+        // 2. Update orphans (campaignId IS NULL)
+        const [updatedCount] = await Order.update(
+            { campaignId: legacyCampaign.id },
+            { where: { campaignId: null } }
+        );
+
+        res.json({
+            success: true,
+            campaign: legacyCampaign,
+            created,
+            updatedCount
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Fix old orders
 app.get('/debug/fix-orders', async (req, res) => {
     try {
