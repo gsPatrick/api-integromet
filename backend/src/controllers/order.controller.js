@@ -287,23 +287,33 @@ class OrderController {
                 }
             }
 
-            const asaasResult = await asaasService.generatePaymentLink({
-                customerName,
-                customerPhone,
-                orderId: mainOrder.id, // Use first order ID as reference
-                totalValue,
-                description
-            });
-
-            // 6. Update all orders with payment info
-            for (const order of orders) {
-                order.paymentLink = asaasResult.paymentLink;
-                order.asaasId = asaasResult.asaasId;
-                order.status = 'PENDING_PAYMENT';
-                await order.save();
+        }
             }
 
-            console.log(`[OrderController] Payment link generated: ${asaasResult.paymentLink}`);
+    // Construct Link Title: Customer Name - Products
+    // "Patrick - Vestido X, Camisa Y"
+    const linkTitle = `${customerName} - ${productNames}`;
+    // Asaas name limit check (often 255)
+    const finalLinkTitle = linkTitle.length > 250 ? linkTitle.substring(0, 247) + '...' : linkTitle;
+
+    const asaasResult = await asaasService.generatePaymentLink({
+        customerName,
+        customerPhone,
+        orderId: mainOrder.id, // Use first order ID as reference
+        totalValue,
+        description,
+        linkName: finalLinkTitle // Pass explicit name
+    });
+
+    // 6. Update all orders with payment info
+    for(const order of orders) {
+        order.paymentLink = asaasResult.paymentLink;
+        order.asaasId = asaasResult.asaasId;
+        order.status = 'PENDING_PAYMENT';
+        await order.save();
+    }
+
+            console.log(`[OrderController] Payment link generated: ${asaasResult.paymentLink} `);
 
             res.json({
                 success: true,
@@ -404,7 +414,7 @@ class OrderController {
                     sentCount++;
 
                 } catch (err) {
-                    console.error(`Failed to send confirmation to ${phone}:`, err.message);
+                    console.error(`Failed to send confirmation to ${ phone }: `, err.message);
                     errors.push({ phone, error: err.message });
                 }
             }
@@ -431,11 +441,11 @@ class OrderController {
             const price = parseFloat(o.sellPrice || 0).toFixed(2);
             const cleanDesc = (o.productRaw || 'Produto').replace(/^\[[\w-]+\]\s*/, '');
             const details = [];
-            if (o.extractedSize) details.push(`Tam: ${o.extractedSize}`);
-            if (o.extractedColor) details.push(`Cor: ${o.extractedColor}`);
-            const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+            if (o.extractedSize) details.push(`Tam: ${ o.extractedSize } `);
+            if (o.extractedColor) details.push(`Cor: ${ o.extractedColor } `);
+            const detailStr = details.length > 0 ? ` (${ details.join(', ') })` : '';
 
-            return `• ${qty}x ${cleanDesc}${detailStr} - R$ ${price}`;
+            return `• ${ qty }x ${ cleanDesc }${ detailStr } - R$ ${ price } `;
         });
 
         // Calculate Total
@@ -443,39 +453,39 @@ class OrderController {
         const totalStr = totalVal.toFixed(2).replace('.', ',');
 
         // Build Message
-        return `Olá, tudo bem?
+        return `Olá, tudo bem ?
 
-Aqui está um resumo do seu pedido da ${campaignDescription || 'Campanha'} 🥳
+    Aqui está um resumo do seu pedido da ${ campaignDescription || 'Campanha' } 🥳
 
 ATENÇÃO ⚠⚠
 
 🚚 Estimativa de entrega:
 15 dias úteis
 
-✅ Confira o produto, a quantidade e o valor, pois não fazemos trocas. Caso esteja tudo correto, pedimos que faça a confirmação, o pagamento e nos envie o comprovante.
+✅ Confira o produto, a quantidade e o valor, pois não fazemos trocas.Caso esteja tudo correto, pedimos que faça a confirmação, o pagamento e nos envie o comprovante.
 
-*O silêncio será considerado como aprovação*
+* O silêncio será considerado como aprovação *
 
 💰 Pix:
 51533293000103
 Favorecido: Brinca Comigo Comércio de Brinquedos Ltda.
 
-💳Se preferir, você pode pagar com cartão de crédito através de um link com acréscimo de 5% em até 3x, com parcelas mínimas de R$ 100,00.
+💳Se preferir, você pode pagar com cartão de crédito através de um link com acréscimo de 5 % em até 3x, com parcelas mínimas de R$ 100,00.
 
 O frete será cobrado separadamente, após a chegada dos produtos e alguns dias antes da rota do motoboy.
 
 🛵 R$ 15,00 dentro de Brasília para pedidos que caibam no baú do motoboy.
 
-🚗 R$ 20,00 quando for necessária entrega por carro (para pedidos maiores).
+🚗 R$ 20,00 quando for necessária entrega por carro(para pedidos maiores).
 
-Ou retirada no Scia - seg a sexta de 9h às 16h (avisar com antecedência)
+Ou retirada no Scia - seg a sexta de 9h às 16h(avisar com antecedência)
 
-Caso o endereço de entrega seja diferente do registrado na Nota Fiscal, avise-nos com antecedência para que possamos corrigir a informação e evitar a cobrança de uma nova taxa de entrega.
+Caso o endereço de entrega seja diferente do registrado na Nota Fiscal, avise - nos com antecedência para que possamos corrigir a informação e evitar a cobrança de uma nova taxa de entrega.
 
 RESUMO DO PEDIDO:
-${itemLines.join('\n')}
+${ itemLines.join('\n') }
 
-*Total do Pedido: R$ ${totalStr}*`;
+* Total do Pedido: R$ ${ totalStr }* `;
     }
 
 
@@ -513,11 +523,11 @@ ${itemLines.join('\n')}
                 }
             );
 
-            console.log(`[OrderController] Moved ${updatedCount} orders to campaign ${targetCampaignId} (${targetCampaign.name}).`);
+            console.log(`[OrderController] Moved ${ updatedCount } orders to campaign ${ targetCampaignId } (${ targetCampaign.name }).`);
 
             return res.json({
                 success: true,
-                message: `${updatedCount} pedidos movidos com sucesso.`,
+                message: `${ updatedCount } pedidos movidos com sucesso.`,
                 movedCount: updatedCount,
                 targetCampaignName: targetCampaign.name
             });
@@ -540,7 +550,7 @@ ${itemLines.join('\n')}
                 return res.status(404).json({ error: 'Pedido não encontrado' });
             }
 
-            console.log(`[OrderValidator] Validating Order #${id} - ${order.customerName}`);
+            console.log(`[OrderValidator] Validating Order #${ id } - ${ order.customerName } `);
 
             // Context determination
             let context = '';
@@ -559,9 +569,9 @@ ${itemLines.join('\n')}
 
             if (aiResult.found && aiResult.product) {
                 const p = aiResult.product;
-                logs.push(`AI: ${p.code} - ${p.name} | R$ ${p.price}`);
-                if (p.size) logs.push(` Tamanho: ${p.size}`);
-                if (p.color) logs.push(` Cor: ${p.color}`);
+                logs.push(`AI: ${ p.code } - ${ p.name } | R$ ${ p.price } `);
+                if (p.size) logs.push(` Tamanho: ${ p.size } `);
+                if (p.color) logs.push(` Cor: ${ p.color } `);
 
                 // 1. Validate Price
                 const currentPrice = parseFloat(order.sellPrice || 0);
@@ -570,28 +580,28 @@ ${itemLines.join('\n')}
                 if (catalogPrice > 0 && Math.abs(currentPrice - catalogPrice) > 0.01) {
                     updates.sellPrice = catalogPrice;
                     updates.catalogPrice = catalogPrice;
-                    logs.push(`Preço corrigido: R$ ${currentPrice} -> R$ ${catalogPrice}`);
+                    logs.push(`Preço corrigido: R$ ${ currentPrice } -> R$ ${ catalogPrice } `);
                 }
 
                 // 2. Validate Name/Code
                 const currentName = order.productRaw || '';
                 // If AI returns a code, ensure it's in the name
                 if (p.code && !currentName.includes(p.code)) {
-                    updates.productRaw = `${p.code} - ${p.name || currentName}`;
-                    logs.push(`Nome normalizado: ${updates.productRaw}`);
+                    updates.productRaw = `${ p.code } - ${ p.name || currentName } `;
+                    logs.push(`Nome normalizado: ${ updates.productRaw } `);
                 } else if (p.name && (!currentName || currentName.length < 5 || currentName.includes('WhatsApp'))) {
-                    updates.productRaw = `${p.code ? p.code + ' - ' : ''}${p.name}`;
+                    updates.productRaw = `${ p.code ? p.code + ' - ' : '' }${ p.name } `;
                 }
 
                 // 3. Validate Variables (Size/Color)
                 if (p.size && p.size !== order.extractedSize) {
                     updates.extractedSize = p.size;
-                    logs.push(`Tamanho: ${order.extractedSize || '(vazio)'} -> ${p.size}`);
+                    logs.push(`Tamanho: ${ order.extractedSize || '(vazio)' } -> ${ p.size } `);
                 }
 
                 if (p.color && p.color !== order.extractedColor) {
                     updates.extractedColor = p.color;
-                    logs.push(`Cor: ${order.extractedColor || '(vazio)'} -> ${p.color}`);
+                    logs.push(`Cor: ${ order.extractedColor || '(vazio)' } -> ${ p.color } `);
                 }
 
                 if (p.colorCode && p.colorCode !== order.extractedColorCode) {
@@ -650,8 +660,8 @@ ${itemLines.join('\n')}
             const orders = await Order.findAll({
                 where: {
                     [Op.or]: [
-                        { originalMessage: { [Op.iLike]: `%${searchTerm}%` } },
-                        { productRaw: { [Op.iLike]: `%${searchTerm}%` } }
+                        { originalMessage: { [Op.iLike]: `% ${ searchTerm }% ` } },
+                        { productRaw: { [Op.iLike]: `% ${ searchTerm }% ` } }
                     ]
                 }
             });
@@ -680,7 +690,7 @@ ${itemLines.join('\n')}
 
             return res.json({
                 success: true,
-                message: `Campaign renamed. Orders processed.`,
+                message: `Campaign renamed.Orders processed.`,
                 moved: movedCount,
                 cleaned: cleanedCount
             });
@@ -713,7 +723,7 @@ ${itemLines.join('\n')}
                 }
             });
 
-            console.log(`[OrderController] Deleted ${count} orders: [${ids.join(', ')}]`);
+            console.log(`[OrderController] Deleted ${ count } orders: [${ ids.join(', ') }]`);
             res.json({ success: true, count, ids });
         } catch (error) {
             console.error('[OrderController] Error deleting orders:', error);
