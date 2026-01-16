@@ -267,6 +267,59 @@ app.get('/debug/bling-search', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: List ALL Bling clients
+app.get('/debug/bling-clients', async (req, res) => {
+    try {
+        const blingService = require('./services/bling.service');
+        const axios = require('axios');
+
+        const token = await blingService.getValidToken();
+        const allClients = [];
+        let page = 1;
+        let hasMore = true;
+
+        console.log('[BlingClients] Fetching all clients from Bling...');
+
+        while (hasMore && page <= 20) { // Limit to 20 pages (2000 clients) for safety
+            await new Promise(r => setTimeout(r, 400)); // Rate limit
+
+            const response = await axios.get(
+                `https://api.bling.com.br/Api/v3/contatos?pagina=${page}&limite=100`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const clients = response.data.data || [];
+
+            if (clients.length === 0) {
+                hasMore = false;
+            } else {
+                allClients.push(...clients.map(c => ({
+                    id: c.id,
+                    nome: c.nome,
+                    cpfCnpj: c.numeroDocumento || '',
+                    telefone: c.telefone || '',
+                    celular: c.celular || '',
+                    email: c.email || ''
+                })));
+                page++;
+            }
+
+            console.log(`[BlingClients] Page ${page - 1}: ${clients.length} clients. Total so far: ${allClients.length}`);
+        }
+
+        console.log(`[BlingClients] Total clients fetched: ${allClients.length}`);
+
+        res.json({
+            totalClients: allClients.length,
+            clients: allClients
+        });
+
+    } catch (error) {
+        console.error('[BlingClients] Error:', error.response?.data || error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Order stats by campaign
 app.get('/debug/stats', async (req, res) => {
     try {
