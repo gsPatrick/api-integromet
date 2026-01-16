@@ -226,24 +226,30 @@ class BlingService {
                     sku = parts.join('-');
                 }
 
-                // 2. Find or Create Product
-                let product = await this._findProduct(token, sku);
-                if (!product) {
-                    // Create it
-                    // Use productRaw as name if available, just cleaning [Code] if old format
-                    let productName = order.productRaw || 'Produto WhatsApp';
+                // 2. Find or Create Product (Only if not a virtual WAPP SKU)
+                // We skip product creation for 'WAPP-...' SKUs to avoid cluttering Bling with 1-off products
+                // and to avoid "Code already exists" validation errors on retries.
+                const isVirtualSku = sku.startsWith('WAPP-');
 
-                    // If old format [Code], clean it for name
-                    if (productName.startsWith('[')) {
-                        productName = productName.replace(/^\[[\w-]+\]\s*/, '') +
-                            ((order.extractedColor || order.extractedSize) ? ` (${[order.extractedColor, order.extractedSize].filter(Boolean).join(', ')})` : '');
+                if (!isVirtualSku) {
+                    let product = await this._findProduct(token, sku);
+                    if (!product) {
+                        // Create it
+                        // Use productRaw as name if available, just cleaning [Code] if old format
+                        let productName = order.productRaw || 'Produto WhatsApp';
+
+                        // If old format [Code], clean it for name
+                        if (productName.startsWith('[')) {
+                            productName = productName.replace(/^\[[\w-]+\]\s*/, '') +
+                                ((order.extractedColor || order.extractedSize) ? ` (${[order.extractedColor, order.extractedSize].filter(Boolean).join(', ')})` : '');
+                        }
+
+                        product = await this._createProduct(token, {
+                            sku: sku,
+                            nome: productName,
+                            price: order.sellPrice || 0
+                        });
                     }
-
-                    product = await this._createProduct(token, {
-                        sku: sku,
-                        nome: productName,
-                        price: order.sellPrice || 0
-                    });
                 }
 
                 // 3. Add to Order Items
@@ -260,12 +266,14 @@ class BlingService {
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
                     unidade: 'UN',
-                    codigo: sku  // Always use SKU, don't link product ID to preserve custom description
+                    // Only send codigo if it's a REAL SKU (not virtual). 
+                    // Virtual items are sent as text-only to preserve description and avoid validation issues.
+                    codigo: isVirtualSku ? undefined : sku
                 };
 
                 // Note: We intentionally DON'T link produto.id because Bling overrides 
                 // the descricao field with the product's registered name when linked.
-                // By using only codigo + descricao, the order will show the full productRaw.
+                // By using only codigo + descricao (for real SKUs), the order will show the full productRaw.
 
                 orderItems.push(itemPayload);
             }
