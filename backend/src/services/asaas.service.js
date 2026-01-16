@@ -177,16 +177,16 @@ class AsaasService {
      * @returns {object} - { asaasId, paymentLink }
      */
     async generatePaymentLink(orderData) {
-        const { customerName, orderId, totalValue, description } = orderData;
+        const { customerName, orderId, totalValue, description, linkName } = orderData;
 
         // Direct call to createPaymentLink (Checkout Page)
-        // We pass orderId to name for visibility
-        const linkName = `Pedido #${orderId} - ${customerName}`;
+        // Use provided linkName (title) or fallback
+        const name = linkName || `Pedido #${orderId} - ${customerName}`;
 
         const payment = await this.createPaymentLink(
             orderId,
             totalValue,
-            linkName,
+            name,
             description || `Pedido no WhatsApp`
         );
 
