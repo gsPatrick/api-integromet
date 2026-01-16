@@ -230,6 +230,43 @@ app.get('/debug/find-client', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Raw Bling search to see all results
+app.get('/debug/bling-search', async (req, res) => {
+    try {
+        const blingService = require('./services/bling.service');
+        const axios = require('axios');
+        const query = req.query.q;
+
+        if (!query) {
+            return res.status(400).json({ error: 'q query param required (search term)' });
+        }
+
+        const token = await blingService.getValidToken();
+
+        const response = await axios.get(
+            `https://api.bling.com.br/Api/v3/contatos?pesquisa=${encodeURIComponent(query)}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        res.json({
+            query,
+            totalResults: response.data.data?.length || 0,
+            results: (response.data.data || []).map(c => ({
+                id: c.id,
+                nome: c.nome,
+                cpfCnpj: c.numeroDocumento || 'N/A',
+                telefone: c.telefone || 'N/A',
+                celular: c.celular || 'N/A',
+                email: c.email || 'N/A'
+            }))
+        });
+
+    } catch (error) {
+        console.error('[BlingSearch] Error:', error.response?.data || error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Order stats by campaign
 app.get('/debug/stats', async (req, res) => {
     try {
