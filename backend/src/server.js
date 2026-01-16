@@ -140,6 +140,59 @@ app.get('/debug/fix-names', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Resync orders to Bling (delete old and recreate)
+app.get('/debug/resync-bling', async (req, res) => {
+    try {
+        const Order = require('./models/Order');
+        const blingService = require('./services/bling.service');
+        const { Op } = require('sequelize');
+
+        const campaignId = parseInt(req.query.campaignId);
+
+        if (!campaignId) {
+            return res.status(400).json({ error: 'campaignId query param required' });
+        }
+
+        // Find all orders in this campaign that have been synced to Bling
+        const orders = await Order.findAll({
+            where: {
+                campaignId: campaignId,
+                blingId: { [Op.not]: null }
+            }
+        });
+
+        console.log(`[ResyncBling] Found ${orders.length} orders with blingId in campaign ${campaignId}`);
+
+        const results = [];
+
+        for (const order of orders) {
+            const oldBlingId = order.blingId;
+
+            // 1. Delete old order from Bling
+            console.log(`[ResyncBling] Deleting Bling order ${oldBlingId}...`);
+            const deleted = await blingService.deleteOrder(oldBlingId);
+
+            if (deleted) {
+                // 2. Clear blingId so it can be resynced
+                await order.update({ blingId: null, blingSyncedAt: null, status: 'PENDING' });
+                results.push({ orderId: order.id, oldBlingId, deleted: true });
+            } else {
+                results.push({ orderId: order.id, oldBlingId, deleted: false, error: 'Failed to delete' });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Deleted ${results.filter(r => r.deleted).length} orders from Bling. They are now ready to be resynced via the Dashboard.`,
+            results
+        });
+
+    } catch (error) {
+        console.error('[ResyncBling] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Order stats by campaign
 app.get('/debug/stats', async (req, res) => {
     try {

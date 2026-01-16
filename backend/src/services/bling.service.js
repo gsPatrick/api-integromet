@@ -597,6 +597,36 @@ class BlingService {
             return false;
         }
     }
+
+    /**
+     * Delete an order from Bling
+     * @param {number} blingOrderId - Bling order ID
+     * @returns {boolean} - Success status
+     */
+    async deleteOrder(blingOrderId) {
+        try {
+            const token = await this.getValidToken();
+
+            console.log(`[BlingService] Deleting order ${blingOrderId}...`);
+
+            await this._sleep(350);
+
+            await axios.delete(
+                `${this.baseUrl}/pedidos/vendas/${blingOrderId}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            console.log(`[BlingService] ✓ Order ${blingOrderId} deleted`);
+            return true;
+        } catch (error) {
+            console.error(`[BlingService] Failed to delete order:`, error.response?.data || error.message);
+            return false;
+        }
+    }
 }
 
 module.exports = new BlingService();
