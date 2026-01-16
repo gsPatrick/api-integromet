@@ -81,7 +81,7 @@ const Order = sequelize.define('Order', {
         onDelete: 'SET NULL'
     },
     blingId: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.BIGINT,
         allowNull: true,
         comment: 'ID do pedido retornado pelo Bling'
     }
