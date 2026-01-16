@@ -55,9 +55,24 @@ app.get('/setup/bling', blingController.handleSetup);
 app.get('/settings', settingsController.getAll);
 app.put('/settings', settingsController.update);
 // Customer Routes
-// Customer Routes
 app.get('/customers', CustomerController.listCustomers);
 app.get('/customers/:phone/orders', CustomerController.getCustomerOrders);
+
+// DEBUG ENDPOINT: Fix old orders
+app.get('/debug/fix-orders', async (req, res) => {
+    try {
+        const Order = require('./models/Order');
+        const { Op } = require('sequelize');
+        // Update all NULL campaignId to 12
+        const [updated] = await Order.update(
+            { campaignId: 12 },
+            { where: { campaignId: null } }
+        );
+        res.json({ success: true, updatedCount: updated });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 app.post('/customers/:phone/sync', CustomerController.syncCustomerOrders);
 
 // Campaign Routes
