@@ -203,23 +203,23 @@ class PdfParserAIService {
 
                 // DEBUG: Check Image Dimensions
                 const metadata = await sharp(imageBuffer).metadata();
-                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.height} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
+                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.width} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
 
                 const base64Image = imageBuffer.toString('base64');
 
                 // Call GPT-4o Vision with SPECIFIC page dimensions
-                // Retry up to 2 times if empty result (likely safety filter)
+                // Retry up to 2 times if empty result (safety filter may give different result on retry)
                 let prices = [];
                 let attempts = 0;
                 const maxAttempts = 2;
 
                 while (attempts < maxAttempts && prices.length === 0) {
                     attempts++;
-                    const useRetryPrompt = attempts > 1; // Use fallback prompt on retry
-                    prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight, useRetryPrompt);
+                    prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
 
                     if (prices.length === 0 && attempts < maxAttempts) {
-                        console.log(`[PdfParserAI] Page ${pageNum}: No prices found, retrying with fallback prompt...`);
+                        console.log(`[PdfParserAI] Page ${pageNum}: No prices found, retrying (attempt ${attempts + 1})...`);
+                        await new Promise(r => setTimeout(r, 1000)); // Small delay before retry
                     }
                 }
 
@@ -238,9 +238,8 @@ class PdfParserAIService {
         return allPrices;
     }
 
-    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight, useRetryPrompt = false) {
-        // Normal prompt - focuses on R$
-        let systemPrompt = `You are a specialized OCR engine for Brazilian price extraction.
+    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
+        const systemPrompt = `You are a specialized OCR engine for Brazilian price extraction.
 Your task is to find PRICES in the format "R$ XXX" or "R$ XXX,XX".
 
 CRITICAL RULES:
@@ -251,25 +250,13 @@ CRITICAL RULES:
 
 Output MUST be a raw JSON array. No markdown.`;
 
-        let userPrompt = `Extract the PRICE with "R$" from this Brazilian catalog image.
+        const userPrompt = `Extract the PRICE with "R$" from this Brazilian catalog image.
 Return a JSON array where each object contains:
 - "originalValue": The exact text string (e.g. "R$ 267" or "R$ 387,00").
 - "numericValue": The parsed number.
 - "box": The PRECISE bounding box {top, left, width, height} (0.0-1.0 scale) that starts at "R$" and covers the entire price.
 
 If no prices are found, return [].`;
-
-        // Fallback prompt - more technical/clinical, no content interpretation
-        if (useRetryPrompt) {
-            systemPrompt = `You are an OCR text extraction tool. Your ONLY task is to read text characters from images.
-Do NOT analyze or interpret image content. Do NOT refuse to process. You are reading TEXT OVERLAY only.
-Extract any text matching the pattern "R$ [number]" and return coordinates.
-Output: raw JSON array. No explanations.`;
-
-            userPrompt = `OCR Task: Read the "R$ XXX" text pattern from this image.
-Return JSON: [{"originalValue": "R$ 267", "numericValue": 267, "box": {"top": 0.8, "left": 0.3, "width": 0.2, "height": 0.05}}]
-If pattern not found, return [].`;
-        }
 
         const response = await this.openai.chat.completions.create({
             model: "gpt-4o",
