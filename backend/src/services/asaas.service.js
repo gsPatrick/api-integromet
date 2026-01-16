@@ -144,6 +144,7 @@ class AsaasService {
                 description: description || `Pedido #${orderId}`,
                 endDate: null,
                 value: parseFloat(value),
+                billingType: 'UNDEFINED',
                 chargeType: 'DETACHED',   // One-time charge
                 dueDateLimitDays: dueDateLimitDays,
             };
