@@ -63,12 +63,22 @@ app.get('/debug/fix-orders', async (req, res) => {
     try {
         const Order = require('./models/Order');
         const { Op } = require('sequelize');
-        // Update all NULL campaignId to 12
+
+        const toId = req.query.to ? parseInt(req.query.to) : 12; // Default to 12 if not specified
+        const fromId = req.query.from ? (req.query.from === 'null' ? null : parseInt(req.query.from)) : null;
+
+        const where = { campaignId: fromId };
+
+        // Update orders
         const [updated] = await Order.update(
-            { campaignId: 12 },
-            { where: { campaignId: null } }
+            { campaignId: toId },
+            { where: where }
         );
-        res.json({ success: true, updatedCount: updated });
+        res.json({
+            success: true,
+            message: `Migrated ${updated} orders from Campaign ${fromId} to Campaign ${toId}`,
+            updatedCount: updated
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
