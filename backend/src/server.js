@@ -63,22 +63,12 @@ app.get('/debug/fix-orders', async (req, res) => {
     try {
         const Order = require('./models/Order');
         const { Op } = require('sequelize');
-
-        const toId = req.query.to ? parseInt(req.query.to) : 12; // Default to 12 if not specified
-        const fromId = req.query.from ? (req.query.from === 'null' ? null : parseInt(req.query.from)) : null;
-
-        const where = { campaignId: fromId };
-
-        // Update orders
+        // Update all NULL campaignId to 12
         const [updated] = await Order.update(
-            { campaignId: toId },
-            { where: where }
+            { campaignId: 12 },
+            { where: { campaignId: null } }
         );
-        res.json({
-            success: true,
-            message: `Migrated ${updated} orders from Campaign ${fromId} to Campaign ${toId}`,
-            updatedCount: updated
-        });
+        res.json({ success: true, updatedCount: updated });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -148,6 +138,7 @@ app.post('/catalog/generate-markup-upload', pdfUpload.fields([
 app.use('/orders', authMiddleware);
 
 app.get('/orders', orderController.listOrders);
+app.put('/orders/move', orderController.moveOrders.bind(orderController));
 app.post('/orders/send-confirmation', orderController.sendConfirmation.bind(orderController));
 app.post('/orders/generate-link-sync', orderController.generateLinkSync.bind(orderController)); // Asaas + Bling sync
 app.get('/orders/:id', orderController.getOrder);

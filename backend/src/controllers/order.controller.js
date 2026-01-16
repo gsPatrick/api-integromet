@@ -439,6 +439,54 @@ ${itemLines.join('\n')}
     }
 
 
+    /**
+     * Move orders to another campaign
+     * PUT /orders/move
+     * Body: { orderIds: [1, 2, ...], targetCampaignId: 15 }
+     */
+    async moveOrders(req, res) {
+        try {
+            const { orderIds, targetCampaignId } = req.body;
+
+            if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+                return res.status(400).json({ error: 'Lista de pedidos inválida (orderIds).' });
+            }
+            if (!targetCampaignId) {
+                return res.status(400).json({ error: 'Campanha de destino não informada.' });
+            }
+
+            const Campaign = require('../models/Campaign');
+            const targetCampaign = await Campaign.findByPk(targetCampaignId);
+            if (!targetCampaign) {
+                return res.status(404).json({ error: 'Campanha de destino não encontrada.' });
+            }
+
+            // Update orders
+            const { Op } = require('sequelize');
+            // Update returns [numberOfAffectedRows]
+            const [updatedCount] = await Order.update(
+                { campaignId: targetCampaignId },
+                {
+                    where: {
+                        id: { [Op.in]: orderIds }
+                    }
+                }
+            );
+
+            console.log(`[OrderController] Moved ${updatedCount} orders to campaign ${targetCampaignId} (${targetCampaign.name}).`);
+
+            return res.json({
+                success: true,
+                message: `${updatedCount} pedidos movidos com sucesso.`,
+                movedCount: updatedCount,
+                targetCampaignName: targetCampaign.name
+            });
+
+        } catch (error) {
+            console.error('[OrderController] Error moving orders:', error);
+            return res.status(500).json({ error: 'Erro ao mover pedidos: ' + error.message });
+        }
+    }
 }
 
 module.exports = new OrderController();
