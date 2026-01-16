@@ -193,6 +193,43 @@ app.get('/debug/resync-bling', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Find client in Bling by phone
+app.get('/debug/find-client', async (req, res) => {
+    try {
+        const blingService = require('./services/bling.service');
+        const phone = req.query.phone;
+
+        if (!phone) {
+            return res.status(400).json({ error: 'phone query param required' });
+        }
+
+        console.log(`[FindClient] Searching for phone: ${phone}`);
+
+        const token = await blingService.getValidToken();
+        const client = await blingService._findClient(token, null, phone);
+
+        if (client) {
+            res.json({
+                found: true,
+                client: {
+                    id: client.id,
+                    nome: client.nome,
+                    cpfCnpj: client.numeroDocumento || client.cpfCnpj || 'Não cadastrado',
+                    telefone: client.telefone,
+                    celular: client.celular,
+                    email: client.email
+                }
+            });
+        } else {
+            res.json({ found: false, message: 'Cliente não encontrado no Bling' });
+        }
+
+    } catch (error) {
+        console.error('[FindClient] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Order stats by campaign
 app.get('/debug/stats', async (req, res) => {
     try {
