@@ -506,7 +506,6 @@ ${itemLines.join('\n')}
             // Context determination
             let context = '';
             if (order.campaignId === 12) context = 'Fantástico Planeta Precoce';
-            if (order.campaignId === 11) context = 'Lili Sampedro Jan 26';
 
             // Call AI with full analysis context
             // Pass original message and product raw
@@ -587,6 +586,68 @@ ${itemLines.join('\n')}
 
         } catch (error) {
             console.error('Error validating order:', error);
+            return res.status(500).json({ error: error.message });
+        }
+    }
+
+    /**
+     * Fix Lili Sampedro Campaign Orders (Ad-hoc fix)
+     * POST /admin/fix-lili
+     */
+    async fixLili(req, res) {
+        try {
+            const { Op } = require('sequelize');
+            const Campaign = require('../models/Campaign');
+            const Order = require('../models/Order');
+
+            const CAMPAIGN_ID = 11;
+            const CAMPAIGN_NAME = 'Lili Sampedro Jan 26';
+
+            // 1. Rename Campaign
+            await Campaign.update({ name: CAMPAIGN_NAME }, { where: { id: CAMPAIGN_ID } });
+
+            // 2. Find Orders
+            const searchTerm = 'Lili Sampedro Jan 26';
+            const orders = await Order.findAll({
+                where: {
+                    [Op.or]: [
+                        { originalMessage: { [Op.iLike]: `%${searchTerm}%` } },
+                        { productRaw: { [Op.iLike]: `%${searchTerm}%` } }
+                    ]
+                }
+            });
+
+            let movedCount = 0;
+            let cleanedCount = 0;
+
+            for (const order of orders) {
+                let needsSave = false;
+
+                if (order.campaignId !== CAMPAIGN_ID) {
+                    order.campaignId = CAMPAIGN_ID;
+                    needsSave = true;
+                    movedCount++;
+                }
+
+                if (order.productRaw && order.productRaw.includes('ou Lili Sampedro Jan 26')) {
+                    order.productRaw = order.productRaw.replace('ou Lili Sampedro Jan 26', '').trim();
+                    if (order.productRaw.endsWith('-')) order.productRaw = order.productRaw.slice(0, -1).trim();
+                    needsSave = true;
+                    cleanedCount++;
+                }
+
+                if (needsSave) await order.save();
+            }
+
+            return res.json({
+                success: true,
+                message: `Campaign renamed. Orders processed.`,
+                moved: movedCount,
+                cleaned: cleanedCount
+            });
+
+        } catch (error) {
+            console.error('Error fixing lili:', error);
             return res.status(500).json({ error: error.message });
         }
     }
