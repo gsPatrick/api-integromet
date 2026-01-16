@@ -432,16 +432,40 @@ class WebhookController {
                 return res.status(200).json({ received: true, warning: 'No externalReference' });
             }
 
-            // Find order(s) with this asaasId or the reference order
+            // Find order(s) with multiple strategies:
+
+            // 1. Try by direct Charge ID (pay_...) - stored in asaasId
             let orders = await Order.findAll({
                 where: { asaasId: payment.id }
             });
 
-            // If no orders found by asaasId, try by ID
-            if (orders.length === 0) {
+            // 2. If valid paymentLink ID exists (lpg_...) - stored in asaasId
+            if (orders.length === 0 && payment.paymentLink) {
+                console.log(`[AsaasWebhook] Searching by Payment Link ID: ${payment.paymentLink}`);
+                orders = await Order.findAll({
+                    where: { asaasId: payment.paymentLink } // We stored lpg_xxx here
+                });
+            }
+
+            // 3. Try by externalReference (Order ID)
+            if (orders.length === 0 && orderId) {
+                console.log(`[AsaasWebhook] Searching by externalReference: ${orderId}`);
                 const order = await Order.findByPk(orderId);
                 if (order) {
                     orders = [order];
+                }
+            }
+
+            // 4. Fallback: Try regex on Description (Pedido #123) details
+            if (orders.length === 0 && payment.description) {
+                const match = payment.description.match(/Pedido #(\d+)/);
+                if (match) {
+                    const extractedId = match[1];
+                    console.log(`[AsaasWebhook] Searching by Description RegEx: ${extractedId}`);
+                    const order = await Order.findByPk(extractedId);
+                    if (order) {
+                        orders = [order];
+                    }
                 }
             }
 
