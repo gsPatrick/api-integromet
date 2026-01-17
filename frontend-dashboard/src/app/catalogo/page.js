@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { BookOpen, Upload, Search, Trash2, Loader2, AlertCircle, FileText, CheckCircle, Sparkles, Database, X, Eye, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Plus, Paperclip } from 'lucide-react';
+import { BookOpen, Upload, Search, Trash2, Loader2, AlertCircle, FileText, CheckCircle, Sparkles, Database, X, Eye, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Plus, Paperclip, Tag } from 'lucide-react';
 import api from '../../services/api';
 
 export default function CatalogPage() {
@@ -465,16 +465,30 @@ export default function CatalogPage() {
                 ) : (
                     <div style={{ padding: '0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #eee', background: '#f9fafb' }}>
+                                    <th style={{ padding: '12px 24px', textAlign: 'left', color: '#546e7a', fontWeight: 600 }}>Código</th>
+                                    <th style={{ padding: '12px 24px', textAlign: 'left', color: '#546e7a', fontWeight: 600 }}>Produto / Catálogo</th>
+                                    <th style={{ padding: '12px 24px', textAlign: 'right', color: '#546e7a', fontWeight: 600 }}>Preço</th>
+                                    <th style={{ padding: '12px 24px', textAlign: 'right', color: '#546e7a', fontWeight: 600 }}>Status</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 {products.map((p, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                        <td style={{ padding: '16px 24px', fontWeight: 600, color: '#37474f' }}>
+                                            {p.code === 'CATALOG_META' ? <span style={{ fontSize: '0.8rem', background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '4px' }}>ARQUIVO</span> : p.code}
+                                        </td>
                                         <td style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <FileText size={20} color="#546e7a" />
+                                            {p.code === 'CATALOG_META' ? <FileText size={20} color="#546e7a" /> : <Tag size={20} color="#ff9800" />}
                                             <span style={{ fontWeight: 500, color: '#263238' }}>{p.catalogName || p.name}</span>
+                                        </td>
+                                        <td style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 500, color: '#455a64' }}>
+                                            {p.price_1_3 ? `R$ ${parseFloat(p.price_1_3).toFixed(2).replace('.', ',')}` : '-'}
                                         </td>
                                         <td style={{ padding: '16px 24px', textAlign: 'right', color: '#4caf50', fontWeight: 500 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                                                <CheckCircle size={16} /> Ativo na IA
+                                                <CheckCircle size={16} /> Ativo
                                             </div>
                                         </td>
                                     </tr>
