@@ -265,9 +265,10 @@ class OrderController {
             // User requested to remove product details from description (20:37)
             const description = `Pedido - ${campaignDescription || 'Loja'}`;
 
-            // Construct Link Title: Customer Name - Campaign Name
-            // Request: "nome do cliente - campanha" => "Patrick - Precoce Jan 26"
-            const linkTitle = `${customerName} - ${campaignDescription || 'Campanha'}`;
+            // Construct Link Title: [BlingID] - Customer Name - Campaign Name
+            // Request: "numero do pedido ... nome do cliente"
+            const blingPrefix = mainOrder.blingId ? `${mainOrder.blingId} - ` : '';
+            const linkTitle = `${blingPrefix}${customerName} - ${campaignDescription || 'Campanha'}`;
             // Asaas name limit check (often 255)
             const finalLinkTitle = linkTitle.length > 250 ? linkTitle.substring(0, 247) + '...' : linkTitle;
 
