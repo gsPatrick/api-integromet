@@ -412,6 +412,77 @@ class CatalogAssistantService {
             console.error('[CatalogAssistant] Error running syncVectorStore:', error);
         }
     }
+
+    /**
+     * Extracts ALL products from a specific file using File Search (Faster)
+     * Optmized for speed as per user request.
+     */
+    async extractAllProductsFast(fileId) {
+        await this.initialize();
+        console.log(`[CatalogAssistant] Extracting products from Ref File: ${fileId} using File Search (Optimized)...`);
+
+        const prompt = `
+        ANALISE O ARQUIVO ANEXADO (ID: ${fileId}).
+        
+        OBJETIVO:
+        Extrair a lista produtos (Código/Ref e Preço) deste catálogo.
+        
+        SAÍDA (JSON Puro):
+        [
+            { "code": "REF123", "price": 99.90 },
+            { "code": "REF124", "price": 109.90 }
+        ]
+        
+        Regras:
+        1. Ignore "R$".
+        2. Liste o máximo que conseguir encontrar.
+        3. Se não encontrar, retorne [].
+        4. NÃO explique, NÃO cite fontes. APENAS JSON.
+        `;
+
+        try {
+            const thread = await this.openai.beta.threads.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt,
+                        attachments: [
+                            { file_id: fileId, tools: [{ type: "file_search" }] }
+                        ]
+                    }
+                ]
+            });
+
+            // Start Run (Faster)
+            const run = await this.openai.beta.threads.runs.createAndPoll(
+                thread.id,
+                { assistant_id: this.assistantId }
+            );
+
+            if (run.status === 'completed') {
+                const messages = await this.openai.beta.threads.messages.list(thread.id);
+                const responseText = messages.data[0].content[0].text.value;
+
+                // Extract JSON array
+                const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+                if (jsonMatch) {
+                    const products = JSON.parse(jsonMatch[0]);
+                    console.log(`[CatalogAssistant] Extracted ${products.length} products via File Search.`);
+                    return products;
+                }
+
+                // Fallback attempt to parse loose format if JSON fails
+                console.warn('[CatalogAssistant] No JSON array found in response:', responseText.substring(0, 100));
+                return [];
+            } else {
+                console.error('[CatalogAssistant] Extraction run failed:', run.status);
+                return [];
+            }
+        } catch (e) {
+            console.error('[CatalogAssistant] Extraction Error:', e.message);
+            return [];
+        }
+    }
 }
 
 module.exports = new CatalogAssistantService();

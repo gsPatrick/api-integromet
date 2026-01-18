@@ -116,8 +116,8 @@ class CatalogController {
                     try {
                         console.log(`[CatalogController] Starting OpenAI Extraction for ${catalogName} (File ${fileId})...`);
 
-                        const extractedProducts = await catalogAssistant.extractAllProducts(fileId);
-                        console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI.`);
+                        const extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
+                        console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI (Fast Mode).`);
 
                         let savedCount = 0;
                         for (const p of extractedProducts) {
