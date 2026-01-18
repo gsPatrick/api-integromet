@@ -270,12 +270,41 @@ class WebhookController {
                         // Use size-specific price if available
                         if (!catalogPrice) {
                             if (bestMatch.tamanhos_precos && produto.tamanho) {
-                                // Simple logic to match size
-                                const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => k.includes(produto.tamanho));
+                                // Smarter logic to match size (Exact, Range, or List)
+                                const userSize = String(produto.tamanho).trim().toUpperCase();
+                                console.log(`[Webhook] Trying to match user size "${userSize}" against keys: ${Object.keys(bestMatch.tamanhos_precos).join(', ')}`);
+
+                                const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => {
+                                    const key = String(k).trim().toUpperCase();
+
+                                    // 1. Exact Match
+                                    if (key === userSize) return true;
+
+                                    // 2. Range Match (e.g. "4-8", "P-G") - Numeric only for safety
+                                    if (key.includes('-') && !isNaN(parseInt(userSize))) {
+                                        const [min, max] = key.split('-').map(v => parseInt(v.trim()));
+                                        const target = parseInt(userSize);
+                                        if (!isNaN(min) && !isNaN(max) && !isNaN(target)) {
+                                            return target >= min && target <= max;
+                                        }
+                                    }
+
+                                    // 3. List Match (e.g. "P/M/G" or "4, 6, 8")
+                                    if (key.includes('/') || key.includes(',')) {
+                                        const parts = key.split(/[\/,]/).map(s => s.trim());
+                                        return parts.includes(userSize);
+                                    }
+
+                                    // 4. Fallback: Includes (old logic)
+                                    return key.includes(userSize);
+                                });
+
                                 if (sizeKey) {
                                     catalogPrice = bestMatch.tamanhos_precos[sizeKey];
+                                    console.log(`[Webhook] Matched price R$${catalogPrice} for size "${userSize}" (Key: "${sizeKey}")`);
                                 } else {
                                     catalogPrice = bestMatch.preco;
+                                    console.log(`[Webhook] No specific size match, using base price: R$${catalogPrice}`);
                                 }
                             } else {
                                 catalogPrice = bestMatch.preco;
