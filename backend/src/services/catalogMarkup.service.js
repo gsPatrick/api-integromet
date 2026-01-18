@@ -202,7 +202,7 @@ class CatalogMarkupService {
 
         // If no prices found via text extraction, try Vision API
         if (prices.length === 0) {
-            console.log(`[CatalogMarkup] No text prices found. Trying GPT-4o Vision for image-based PDF...`);
+            console.log(`[CatalogMarkup] No text prices found. Trying Image-based OCR (Tesseract)...`);
 
             // Get page dimensions for coordinate mapping
             const firstPage = pages[0];

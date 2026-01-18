@@ -1,4 +1,7 @@
 const OpenAI = require('openai');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 class PdfParserAIService {
     constructor() {
@@ -6,7 +9,6 @@ class PdfParserAIService {
             apiKey: process.env.OPENAI_API_KEY
         });
 
-        // Ensure Homebrew bin is in PATH for Mac (critical for pdf2pic/gm)
         if (process.platform === 'darwin' && !process.env.PATH.includes('/opt/homebrew/bin')) {
             console.log('[PdfParserAI] Adding /opt/homebrew/bin to PATH for GraphicsMagick');
             process.env.PATH = `/opt/homebrew/bin:${process.env.PATH}`;
@@ -16,17 +18,7 @@ class PdfParserAIService {
     async parsePricePdf(pdfBuffer) {
         console.log('[PdfParserAI] Extracting text from PDF...');
         const textPages = await this.extractTextPages(pdfBuffer);
-
-        // Merge text to send context (or chunk if too big)
-        // Tables usually span pages but items don't split much.
-        // Let's process page by page or groups to keep context of Headers?
-        // Headers might be on Page 1 and apply to Page 2? Unlikely for sizes.
-
         let allProducts = [];
-
-        // LIMIT: To avoid huge costs during dev, maybe limit pages?
-        // But for prod, we need all.
-        // GPT-4o-mini is cheap.
 
         for (let i = 0; i < textPages.length; i++) {
             console.log(`[PdfParserAI] Analyzing Page ${i + 1}/${textPages.length} with AI...`);
@@ -53,16 +45,12 @@ class PdfParserAIService {
         for (let i = 1; i <= doc.numPages; i++) {
             const page = await doc.getPage(i);
             const content = await page.getTextContent();
-
-            // Reconstruct lines based on Y
             const lines = {};
             content.items.forEach(item => {
                 const y = Math.round(item.transform[5]);
                 if (!lines[y]) lines[y] = [];
                 lines[y].push(item.str);
             });
-
-            // Sort Top-Down
             const sortedYs = Object.keys(lines).map(Number).sort((a, b) => b - a);
             const pageStr = sortedYs.map(y => lines[y].join('   ')).join('\n');
             pages.push(pageStr);
@@ -74,50 +62,17 @@ class PdfParserAIService {
         const prompt = `
         Você é um especialista em extração de dados de tabelas de preços desestruturadas.
         Analise o texto abaixo extraído de uma página de PDF e extraia TODOS os produtos em JSON.
-
-        ESTRUTURA DA RESPOSTA (Array de objetos):
-        [
-          {
-            "code": "2001424",
-            "name": "Macacão...",
-            "prices": [
-               { "label": "1 a 3", "value": 102.95 },
-               { "label": "4 a 8", "value": 102.95 }
-            ]
-          }
-        ]
-
-        REGRAS CRÍTICAS DE EXTRAÇÃO:
-        1. **Varredura Completa**: O texto pode estar em colunas (produtos lado a lado). Analise TODO o texto. Não pare no primeiro item.
-        2. **Identificação de Códigos**: 
-           - Procure por códigos numéricos (ex: 2001424) OU alfanuméricos curtos (ex: LVT 6011, LBL 6016) se seguidos por preço.
-           - Geralmente de 4 a 8 caracteres.
-        3. **Preços e Tamanhos**:
-           - Associe cada preço ao seu tamanho/grade (Ex: "1 a 3   4 a 8").
-           - Se os tamanhos estiverem em uma linha separada acima, aplique-os a todos os produtos abaixo até o próximo cabeçalho.
-        4. **Validação (Passo Final)**:
-           - Antes de gerar a resposta, REVISE o texto original.
-           - Verifique se você não esqueceu nenhum código que tenha um preço próximo (R$).
-           - Se houver dois produtos na mesma linha horizontal, extraia AMBOS.
-        5. **Formato**:
-           - Converta valores R$ para float (ponto).
-           - JSON puro, sem markdown.
-
-        TEXTO DO PDF:
-        ${text}
+        TEXTO DO PDF: ${text}
         `;
-
         const response = await this.openai.chat.completions.create({
-            model: "gpt-4o-mini", // Fast and capable
+            model: "gpt-4o-mini",
             messages: [
                 { role: "system", content: "You are a data extraction assistant. Output JSON only." },
                 { role: "user", content: prompt }
             ],
             temperature: 0.1
         });
-
         const content = response.choices[0].message.content;
-        // Clean markdown blocks
         const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
         return JSON.parse(cleanContent);
     }
@@ -125,17 +80,12 @@ class PdfParserAIService {
     convertToMap(products) {
         const map = new Map();
         products.forEach(p => {
-            // Validate
             if (p.code && p.prices && Array.isArray(p.prices)) {
-                // Clean Code
                 const cleanCode = String(p.code).trim();
-
-                // Normalize Prices
                 const validPrices = p.prices.map(pr => ({
                     price: Number(pr.value),
                     label: pr.label || ''
                 })).filter(pr => !isNaN(pr.price) && pr.price > 0);
-
                 if (validPrices.length > 0) {
                     map.set(cleanCode, validPrices);
                 }
@@ -144,21 +94,22 @@ class PdfParserAIService {
         return map;
     }
 
-    /**
-     * Extract prices directly from PDF images using GPT-4o Vision
-     * Returns array of { value: number, x: number, y: number, width: number, pageIndex: number }
-     */
     async extractPricesFromImagePdf(pdfBuffer, pageWidth, pageHeight) {
-        console.log('[PdfParserAI] Using GPT-4o Vision for image-based PDF...');
+        console.log('[PdfParserAI] Using Smart Hybrid OCR (Tesseract + GPT Context + Fallback)...');
 
+        const Tesseract = require('tesseract.js');
         const sharp = require('sharp');
+        const fs = require('fs');
         const { fromBuffer } = require('pdf2pic');
 
-        // Configure pdf2pic
-        // Configure pdf2pic
-        // Initial configuration moved inside loop for dynamic sizing
+        // Tesseract Setup (The Eyes)
+        const worker = await Tesseract.createWorker('por', 1, { logger: () => { } });
+        await worker.setParameters({
+            tessedit_create_hocr: '0',
+            tessedit_create_tsv: '0',
+            tessedit_create_wordstrbox: '0'
+        });
 
-        // Get page count
         const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
         const uint8Array = new Uint8Array(pdfBuffer);
         const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
@@ -167,159 +118,227 @@ class PdfParserAIService {
 
         let allPrices = [];
 
-        // Process pages (limit to avoid huge API costs)
-        // Increased from 10 to 50 to handle full catalogs
-        const maxPages = Math.min(totalPages, 50);
-
-        for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-            console.log(`[PdfParserAI] Analyzing page ${pageNum}/${totalPages} with Vision...`);
+        // DEBUG: restrict to pages 9-16 for faster verification
+        for (let pageNum = 9; pageNum <= 16; pageNum++) {
+            console.log(`[PdfParserAI] Analyzing page ${pageNum}/${totalPages}...`);
 
             try {
-                // Get Specific Page Dimensions
                 const page = await doc.getPage(pageNum);
                 const viewport = page.getViewport({ scale: 1 });
-                const specificPageWidth = viewport.width;
-                const specificPageHeight = viewport.height;
+                const density = 300; // Ultra High density for precision
+                const scale = density / 72;
+                const widthPx = Math.round(viewport.width * scale);
+                const heightPx = Math.round(viewport.height * scale);
 
-                // Calculate Exact Pixels for 72 DPI (1:1 with PDF points) to fix Aspect Ratio and prevent oversized images
-                const density = 72;
-                const widthPx = Math.round(specificPageWidth * (density / 72));
-                const heightPx = Math.round(specificPageHeight * (density / 72));
-
-                // Instantiate pdf2pic PER PAGE to force correct dimensions
-                const { fromBuffer } = require('pdf2pic');
-                const pageOptions = {
+                const pageConverter = fromBuffer(pdfBuffer, {
                     density: density,
                     savePath: '/tmp',
                     format: 'png',
                     width: widthPx,
                     height: heightPx
-                };
-                const pageConverter = fromBuffer(pdfBuffer, pageOptions);
+                });
 
-                // Convert page
                 const result = await pageConverter(pageNum);
-                const imageBuffer = await sharp(result.path).toBuffer();
 
-                // DEBUG: Check Image Dimensions
-                const metadata = await sharp(imageBuffer).metadata();
-                console.log(`[DEBUG] Page ${pageNum}: PDF Viewport=${specificPageWidth}x${specificPageHeight} | Image=${metadata.width}x${metadata.height} | RatioDiff=${(specificPageWidth / specificPageHeight - metadata.width / metadata.height).toFixed(4)}`);
+                // 1. Tesseract Pass (Precision Logic)
+                const procPath = result.path.replace('.png', '_proc.png');
+                await sharp(result.path).grayscale().normalize().sharpen().toFile(procPath);
 
-                const base64Image = imageBuffer.toString('base64');
+                const ret = await worker.recognize(procPath, {}, { text: true, blocks: true });
+                const blocks = ret.data.blocks;
 
-                // Call GPT-4o Vision with SPECIFIC page dimensions
-                const prices = await this.extractPricesFromImage(base64Image, pageNum - 1, specificPageWidth, specificPageHeight);
-                allPrices.push(...prices);
+                let wordList = [];
+                if (blocks) {
+                    for (const block of blocks) {
+                        for (const para of block.paragraphs) {
+                            for (const line of para.lines) {
+                                for (const word of line.words) {
+                                    if (word.text && word.text.trim().length > 0) {
+                                        wordList.push({
+                                            text: word.text.trim(),
+                                            bbox: word.bbox // {x0, y0, x1, y1}
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
-                // Clean up temp file
-                const fs = require('fs');
+                // 2. GPT Pass (Context + Coordinates)
+                const gptImgPath = result.path.replace('.png', '_gpt.jpg');
+                await sharp(result.path).resize({ width: 1000 }).jpeg({ quality: 85 }).toFile(gptImgPath);
+                const base64Image = fs.readFileSync(gptImgPath, { encoding: 'base64' });
+
+                const prompt = `
+                I am providing an image of a catalog page.
+                Your task is to identify ALL product prices in the image.
+                
+                Rules:
+                1. Identify the price strings visually (e.g. "42,90", "60,00").
+                2. Return the value AND the 1000x1000 bounding box.
+                3. Ignore reference numbers or sizes.
+                4. Output a STRICT JSON array:
+                   [ { "value": "42,90", "box_2d": [ymin, xmin, ymax, xmax] } ]
+                `;
+
+                // Add Delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                const gptResponse = await this.openai.chat.completions.create({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: prompt },
+                                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 1000,
+                    temperature: 0.1
+                });
+
+                const content = gptResponse.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim();
+                let detectedItems = [];
+                try {
+                    detectedItems = JSON.parse(content);
+                } catch (e) {
+                    console.error('Failed to parse GPT response:', content);
+                }
+
+                console.log(`[PdfParserAI] DEBUG: GPT found ${detectedItems.length} items`);
+
+                // 3. Match Logic (Hybird with Fallback)
+                for (const item of detectedItems) {
+                    if (!item.value) continue;
+
+                    const targetDigits = String(item.value).replace(/[^\d]/g, '');
+                    if (targetDigits.length === 0) continue;
+
+                    // Clusering Logic
+                    wordList.sort((a, b) => {
+                        const yCenterA = (a.bbox.y0 + a.bbox.y1) / 2;
+                        const yCenterB = (b.bbox.y0 + b.bbox.y1) / 2;
+                        if (Math.abs(yCenterA - yCenterB) < 10) return a.bbox.x0 - b.bbox.x0;
+                        return a.bbox.y0 - b.bbox.y0;
+                    });
+
+                    let tempClusters = [];
+                    let cluster = [wordList[0]];
+
+                    for (let i = 1; i < wordList.length; i++) {
+                        const prev = wordList[i - 1];
+                        const curr = wordList[i];
+                        const gap = curr.bbox.x0 - prev.bbox.x1;
+                        const yOverlap = Math.min(prev.bbox.y1, curr.bbox.y1) - Math.max(prev.bbox.y0, curr.bbox.y0);
+                        const isSameLine = yOverlap > 0 || Math.abs((prev.bbox.y0 + prev.bbox.y1) / 2 - (curr.bbox.y0 + curr.bbox.y1) / 2) < 10;
+
+                        if (gap > 80 || !isSameLine) {
+                            if (cluster.length > 0) tempClusters.push(cluster);
+                            cluster = [];
+                        }
+                        cluster.push(curr);
+                    }
+                    if (cluster.length) tempClusters.push(cluster);
+
+                    let bestCluster = null;
+                    for (const cl of tempClusters) {
+                        const text = cl.map(w => w.text).join('');
+                        const clusterDigits = text.replace(/[^\d]/g, '');
+                        if (clusterDigits.includes(targetDigits)) {
+                            bestCluster = cl;
+                            break;
+                        }
+                    }
+
+                    if (bestCluster) {
+                        // PRIMARY: Tesseract Precise Match
+                        // console.log(`[PdfParserAI] Checking overlap for ${item.value}`);
+
+                        const leftMost = bestCluster[0];
+                        const leftNeighbor = wordList.find(w => {
+                            const isCurrency = /^R\$/i.test(w.text.trim());
+                            if (!isCurrency) return false;
+                            const gap = leftMost.bbox.x0 - w.bbox.x1;
+                            const yOverlap = Math.min(leftMost.bbox.y1, w.bbox.y1) - Math.max(leftMost.bbox.y0, w.bbox.y0);
+                            return (gap > -20 && gap < 100 && yOverlap > 0);
+                        });
+
+                        if (leftNeighbor) bestCluster.push(leftNeighbor);
+
+                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                        bestCluster.forEach(w => {
+                            if (w.bbox.x0 < minX) minX = w.bbox.x0;
+                            if (w.bbox.y0 < minY) minY = w.bbox.y0;
+                            if (w.bbox.x1 > maxX) maxX = w.bbox.x1;
+                            if (w.bbox.y1 > maxY) maxY = w.bbox.y1;
+                        });
+
+                        const imgW = maxX - minX;
+                        const imgH = maxY - minY;
+                        const pdfX = minX / scale;
+                        const pdfY = viewport.height - (maxY / scale);
+                        const paddingX = 6;
+                        const paddingY = 4;
+
+                        allPrices.push({
+                            text: 'Price',
+                            value: item.value,
+                            x: pdfX - paddingX,
+                            y: pdfY - paddingY,
+                            width: (imgW / scale) + (paddingX * 2),
+                            height: (imgH / scale) + (paddingY * 2),
+                            pageIndex: pageNum - 1,
+                            method: 'hybrid-precise'
+                        });
+                    } else {
+                        // FALLBACK: Pure GPT Coordinates
+                        console.log(`[PdfParserAI] Fallback to GPT Vision for value: ${item.value}`);
+
+                        if (item.box_2d && item.box_2d.length === 4) {
+                            const [ymin, xmin, ymax, xmax] = item.box_2d;
+
+                            // Map 1000x1000 -> PDF
+                            const pdfX = (xmin / 1000) * viewport.width;
+                            const pdfW = ((xmax - xmin) / 1000) * viewport.width;
+                            // Convert Y
+                            const pdfY_Bottom = viewport.height - ((ymax / 1000) * viewport.height);
+                            const pdfH = ((ymax - ymin) / 1000) * viewport.height;
+
+                            const paddingX = 6;
+                            const paddingY = 4;
+
+                            allPrices.push({
+                                text: 'Price',
+                                value: item.value,
+                                x: pdfX - paddingX,
+                                y: pdfY_Bottom - paddingY,
+                                width: pdfW + (paddingX * 2),
+                                height: pdfH + (paddingY * 2),
+                                pageIndex: pageNum - 1,
+                                method: 'gpt-fallback'
+                            });
+                        }
+                    }
+                }
+
+                console.log(`[PdfParserAI] Page ${pageNum}: Found ${allPrices.length} total prices so far.`);
+
+                // Cleanup
+                if (fs.existsSync(gptImgPath)) fs.unlinkSync(gptImgPath);
+                if (fs.existsSync(procPath)) fs.unlinkSync(procPath);
                 if (fs.existsSync(result.path)) fs.unlinkSync(result.path);
 
             } catch (error) {
-                console.error(`[PdfParserAI] Vision error on page ${pageNum}:`, error.message);
+                console.error(`[PdfParserAI] Error on page ${pageNum}:`, error);
             }
         }
 
-        console.log(`[PdfParserAI] Vision extracted ${allPrices.length} prices total`);
+        await worker.terminate();
         return allPrices;
-    }
-
-    async extractPricesFromImage(base64Image, pageIndex, pageWidth, pageHeight) {
-        const systemPrompt = `You are an OCR assistant that extracts price information from product catalog images.
-Analyze the entire image and find the product price (usually formatted as "R$ XXX" or "R$ XXX,XX").
-Return a JSON array with the price value and its exact bounding box coordinates.`;
-
-        const userPrompt = `Find the product price in this image and return its location.
-
-Return a JSON array:
-[
-  {
-    "originalValue": "R$ 267",
-    "numericValue": 267,
-    "box": {
-      "top": 0.85,
-      "left": 0.30,
-      "width": 0.40,
-      "height": 0.08
-    }
-  }
-]
-
-- "box" coordinates are relative (0.0 to 1.0) where top-left is (0,0).
-- Return [] if no price is found.`;
-
-        const response = await this.openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                {
-                    role: "system",
-                    content: systemPrompt
-                },
-                {
-                    role: "user",
-                    content: [
-                        { type: "text", text: userPrompt },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:image/png;base64,${base64Image}`,
-                                detail: "high"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens: 2000,
-            temperature: 0.1
-        });
-
-        const content = response.choices[0].message.content;
-        const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        try {
-            const parsed = JSON.parse(cleanContent);
-
-            // Convert relative positions to absolute PDF coordinates
-            return parsed.map(p => {
-                const box = p.box || {};
-
-                // Fallback or use explicitly returned box
-                const top = box.top !== undefined ? box.top : (p.approximateY || 0);
-                const left = box.left !== undefined ? box.left : (p.approximateX || 0);
-                const widthPct = box.width || 0.15; // Generous default
-                const heightPct = box.height || 0.03;
-
-                const w = widthPct * pageWidth;
-                const h = heightPct * pageHeight;
-
-                // Vision Top Y = top
-                // PDF Y (bottom-left origin) = pageHeight - (Vision Top + Height)
-                // Actually: Top of box in PDF Y = pageHeight - (Vision Top). 
-                // But PDF drawText/drawRectangle usually takes Bottom-Left corner (X, Y).
-                // So we need: Y = pageHeight - (Vision Top + Vision Height)
-
-                const visionBottom = top + heightPct;
-                const pdfY = pageHeight - (visionBottom * pageHeight);
-                const pdfX = left * pageWidth;
-
-                console.log(`[DEBUG] Page ${pageIndex + 1}: Value=${p.numericValue} | BoxTop=${top.toFixed(3)} BoxLeft=${left.toFixed(3)} | PDF_X=${pdfX.toFixed(2)} PDF_Y=${pdfY.toFixed(2)} | PageW=${pageWidth} PageH=${pageHeight}`);
-
-                return {
-                    text: p.originalValue,
-                    value: p.numericValue,
-                    x: pdfX,
-                    y: pdfY,
-                    width: w,
-                    height: h,
-                    pageIndex: pageIndex
-                };
-            });
-        } catch (e) {
-            console.error('[PdfParserAI] Failed to parse Vision response:', e.message);
-            return [];
-        }
     }
 }
 
 module.exports = new PdfParserAIService();
-

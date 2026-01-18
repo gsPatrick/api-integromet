@@ -9,17 +9,21 @@ class CatalogAssistantService {
         this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         this.assistantId = null;
         this.vectorStoreId = null;
+        this.isInitialized = false;
     }
 
     /**
      * Initializes the Assistant if not already created
      */
     async initialize() {
+        if (this.isInitialized) return;
+
         // Load IDs from settings DB
         this.assistantId = await SettingsController.getValue('openai_assistant_id', process.env.OPENAI_ASSISTANT_ID);
         this.vectorStoreId = await SettingsController.getValue('openai_vector_store_id', process.env.OPENAI_VECTOR_STORE_ID);
 
-        if (this.assistantId && this.vectorStoreId) return;
+        // REMOVED early return (bug fix for 404 verification)
+        // if (this.assistantId && this.vectorStoreId) return;
 
         console.log('[CatalogAssistant] Initializing OpenAI Assistant...');
 
@@ -114,6 +118,8 @@ class CatalogAssistantService {
                 console.warn('[CatalogAssistant] Failed to update instructions:', e.message);
             }
         }
+
+        this.isInitialized = true;
     }
 
     /**
