@@ -192,9 +192,10 @@ class WebhookController {
                     markupPercentage = 35;
                 }
 
-                // Still use the candidate names for AI Context to help identification
+                // Still use the candidate names for AI Context to help identification (INTERNAL ONLY)
                 const candidatesNames = candidates.map(c => c.name).join(' ou ');
-                collectionName = `${collectionName} (Contexto: ${candidatesNames})`;
+                // collectionName = `${collectionName} (Contexto: ${candidatesNames})`; // REMOVED as per User Request
+                // We use a separate logic for context if needed, but for now we keep collectionName clean.
 
             } else {
                 console.log(`[Webhook] Active Campaign: "${primaryCampaign.name}" (ID: ${primaryCampaign.id})`);
