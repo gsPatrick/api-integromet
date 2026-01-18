@@ -178,11 +178,24 @@ class WebhookController {
 
             if (candidates.length > 1) {
                 console.log(`[Webhook] ⚠️ Multiple Active Campaigns found for ${chatTargetId}: [${candidates.map(c => c.name).join(', ')}]`);
-                console.log(`[Webhook] defaulting to "${primaryCampaign.name}" (ID: ${primaryCampaign.id}) for markup/context.`);
 
-                // Enhance Collection Name to include all candidates for AI Context
-                // e.g., "Campanha A ou Campanha B"
-                collectionName = candidates.map(c => c.name).join(' ou ');
+                // Fallback Logic requested by User: Default to Campaign ID 18 if ambiguous
+                console.log(`[Webhook] Ambiguity detected. Defaulting to Campaign ID 18 (Safe Harbor).`);
+
+                campaignId = 18;
+                const safeCampaign = await Campaign.findByPk(18);
+                if (safeCampaign) {
+                    collectionName = safeCampaign.name;
+                    markupPercentage = safeCampaign.markupPercentage ?? 35;
+                } else {
+                    collectionName = 'Campanha Padrão (18)';
+                    markupPercentage = 35;
+                }
+
+                // Still use the candidate names for AI Context to help identification
+                const candidatesNames = candidates.map(c => c.name).join(' ou ');
+                collectionName = `${collectionName} (Contexto: ${candidatesNames})`;
+
             } else {
                 console.log(`[Webhook] Active Campaign: "${primaryCampaign.name}" (ID: ${primaryCampaign.id})`);
             }
