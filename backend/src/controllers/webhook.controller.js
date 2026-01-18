@@ -261,6 +261,7 @@ class WebhookController {
 
                 try {
                     const assistResult = await catalogAssistant.searchCatalog(query, collectionName);
+                    console.log('[Webhook] DEBUG AI RESPONSE:', JSON.stringify(assistResult, null, 2));
 
                     if (assistResult.encontrado && assistResult.produtos && assistResult.produtos.length > 0) {
                         const bestMatch = assistResult.produtos[0];
