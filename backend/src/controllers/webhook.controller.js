@@ -288,7 +288,7 @@ class WebhookController {
                             console.log(`[Webhook] AI found product in file: "${bestMatch.arquivo_origem}". Checking Campaign...`);
 
                             // Clean filename (remove extra text if AI added it)
-                            const cleanFileName = bestMatch.arquivo_origem.replace('.pdf', '').trim();
+                            const cleanFileName = bestMatch.arquivo_origem.replace(/\.pdf$/i, '').trim();
 
                             try {
                                 const sourceCatalog = await CatalogProduct.findOne({

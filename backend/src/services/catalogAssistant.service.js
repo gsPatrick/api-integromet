@@ -269,12 +269,15 @@ class CatalogAssistantService {
                                 "preco": 99.90, 
                                 "tamanhos_precos": { "P": 89.90, "M": 99.90, "G": 109.90 }, 
                                 "codigo_cor": "código da cor se houver",
-                                "arquivo_origem": "Nome do arquivo PDF onde foi encontrado (Ex: catalogo_verao.pdf)",
+                                "codigo_cor": "código da cor se houver",
+                                "arquivo_origem": "NOME EXATO DO ARQUIVO PDF (CRUCIAL). Ex: 'Lili Sampedro.pdf'. Se não souber, não invente.",
                                 "confianca": "alta/media/baixa"
                             }
                         ],
                         "observacao": "qualquer nota relevante"
                     }
+                    
+                    ATENÇÃO: O campo 'arquivo_origem' é OBRIGATÓRIO para identificar a campanha correta. Olhe nas citações/anotações qual arquivo foi usado.
                     
                     Se não encontrar NADA, retorne: {"encontrado": false, "produtos": [], "observacao": "motivo"}`
                 }
