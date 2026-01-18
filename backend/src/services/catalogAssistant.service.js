@@ -425,21 +425,27 @@ class CatalogAssistantService {
         ANALISE O ARQUIVO ANEXADO (ID: ${fileId}).
         
         OBJETIVO:
-        Extrair a lista produtos (Código/Ref e Preço) deste catálogo.
+        Extrair TODOS os produtos (mais de 60 itens esperados).
+        
+        IMPORTANTE:
+        O método "File Search" falhou em pegar todos.
+        POR FAVOR, USE **CODE INTERPRETER** (PYTHON) PARA:
+        1. Ler o PDF página por página (biblioteca pypdf ou fitz).
+        2. Extrair o texto de CADA página.
+        3. Identificar padrões de PRODUTO + PREÇO.
+           - Padrão comum: "NOME DO PRODUTO R$ 123,00" ou "REF123 ... R$ 99,90".
+        4. Compilar uma lista EXAUSTIVA.
         
         SAÍDA (JSON Puro):
         [
-            { "code": "REF123", "name": "Nome do Produto", "price": 99.90 },
-            { "code": "TOP LUCY", "name": "Top Lucy", "price": 122.00 }
+            { "code": "REF ou NOME", "name": "Nome", "price": 99.90 },
+            ...
         ]
         
         Regras:
-        1. Ignore "R$".
-        2. Se não houver um código (REF) explícito, **USE O NOME DO PRODUTO** no campo "code".
-           Exemplo: Se o texto for "TOP LUCY R$122,00", então code="TOP LUCY", name="Top Lucy", price=122.00.
-        3. Liste o máximo que conseguir encontrar.
-        4. Se não encontrar, retorne [].
-        5. NÃO explique, NÃO cite fontes. APENAS JSON.
+        1. Se não houver código explícito, USE O NOME como code.
+        2. Percorra TODAS as páginas. Não pule nenhuma.
+        3. Ignore itens sem preço.
         `;
 
         try {
@@ -449,7 +455,7 @@ class CatalogAssistantService {
                         role: "user",
                         content: prompt,
                         attachments: [
-                            { file_id: fileId, tools: [{ type: "file_search" }] }
+                            { file_id: fileId, tools: [{ type: "code_interpreter" }] }
                         ]
                     }
                 ]
