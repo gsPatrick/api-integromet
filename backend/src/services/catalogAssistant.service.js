@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
+const CatalogProduct = require('../models/CatalogProduct');
 const SettingsController = require('../controllers/settings.controller');
 
 class CatalogAssistantService {
@@ -22,7 +23,18 @@ class CatalogAssistantService {
 
         console.log('[CatalogAssistant] Initializing OpenAI Assistant...');
 
-        // 1. Create Vector Store
+        // 1. Verify and Create Vector Store
+        if (this.vectorStoreId) {
+            try {
+                // Verify if it still exists on OpenAI
+                const vsApi = this.openai.beta.vectorStores || this.openai.vectorStores;
+                await vsApi.retrieve(this.vectorStoreId);
+            } catch (error) {
+                console.warn(`[CatalogAssistant] Vector Store ${this.vectorStoreId} not found on OpenAI (404). Creating a new one...`);
+                this.vectorStoreId = null; // Reset to force creation
+            }
+        }
+
         if (!this.vectorStoreId) {
             // FIX: Check where vectorStores lives (root or beta)
             const vsApi = this.openai.beta.vectorStores || this.openai.vectorStores;
@@ -39,6 +51,9 @@ class CatalogAssistantService {
 
             // Persist for future restarts
             await SettingsController.updateValue('openai_vector_store_id', this.vectorStoreId);
+
+            // Auto-Sync: Re-upload existing catalogs to the new store
+            this.syncVectorStore();
         }
 
         // 2. Create Assistant
@@ -60,6 +75,15 @@ class CatalogAssistantService {
                 - Se encontrar o produto mas sem preço, BUSQUE O CÓDIGO nos outros arquivos para achar o preço.
                 - Se houver variação de preço por tamanho, liste todos.
                 - Priorize a precisão do código.`;
+
+        if (this.assistantId) {
+            try {
+                await this.openai.beta.assistants.retrieve(this.assistantId);
+            } catch (error) {
+                console.warn(`[CatalogAssistant] Assistant ${this.assistantId} not found on OpenAI (404). Creating a new one...`);
+                this.assistantId = null;
+            }
+        }
 
         if (!this.assistantId) {
             const assistant = await this.openai.beta.assistants.create({
@@ -258,6 +282,50 @@ class CatalogAssistantService {
         } catch (e) {
             console.error('[CatalogAssistant] Analyze Error:', e);
             return { found: false, error: e.message };
+        }
+    }
+
+
+    /**
+     * Re-uploads all active catalogs from DB to the current Vector Store
+     * Triggered automatically when a new Vector Store is created (e.g. key rotation)
+     */
+    async syncVectorStore() {
+        try {
+            console.log('[CatalogAssistant] Syncing catalogs to new Vector Store...');
+
+            // Find all active catalog metadata
+            const catalogs = await CatalogProduct.findAll({
+                where: {
+                    code: 'CATALOG_META',
+                    isActive: true
+                }
+            });
+
+            if (catalogs.length === 0) {
+                console.log('[CatalogAssistant] No catalogs found to sync.');
+                return;
+            }
+
+            console.log(`[CatalogAssistant] Found ${catalogs.length} catalogs to sync.`);
+
+            for (const cat of catalogs) {
+                if (cat.pdfPath && fs.existsSync(cat.pdfPath)) {
+                    try {
+                        console.log(`[CatalogAssistant] Auto-reuploading: ${cat.catalogName}`);
+                        await this.uploadCatalogPdf(cat.pdfPath, cat.catalogName);
+                    } catch (e) {
+                        console.error(`[CatalogAssistant] Failed to sync ${cat.catalogName}:`, e.message);
+                    }
+                } else {
+                    console.warn(`[CatalogAssistant] File not found for sync: ${cat.catalogName}`);
+                }
+            }
+
+            console.log('[CatalogAssistant] Sync completed.');
+
+        } catch (error) {
+            console.error('[CatalogAssistant] Error running syncVectorStore:', error);
         }
     }
 }
