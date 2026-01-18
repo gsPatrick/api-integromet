@@ -10,12 +10,9 @@ const CatalogController = require('./catalog.controller');
 const SettingsController = require('./settings.controller');
 const Campaign = require('../models/Campaign');
 const catalogAssistant = require('../services/catalogAssistant.service'); // Fallback
+const { Op } = require('sequelize');
 
 class WebhookController {
-    // ... (rest of class)
-
-    // ... (inside processMessagePayload loop)
-
 
     constructor() {
         this.handleWebhook = this.handleWebhook.bind(this);
@@ -32,7 +29,6 @@ class WebhookController {
             const currentChatId = payload.chatId || payload.phone;
             console.log(`[NOVA MENSAGEM] Chat: "${chatName}" | ID: "${currentChatId}"`);
 
-            // 2. SECURITY WHITELIST
             // 2. SECURITY WHITELIST
             const allowedGroupIds = process.env.ALLOWED_GROUP_ID ? process.env.ALLOWED_GROUP_ID.split(',') : [];
 
@@ -199,9 +195,7 @@ class WebhookController {
 
                 // Still use the candidate names for AI Context to help identification (INTERNAL ONLY)
                 const candidatesNames = candidates.map(c => c.name).join(' ou ');
-                // collectionName = `${collectionName} (Contexto: ${candidatesNames})`; // REMOVED as per User Request
-                // We use a separate logic for context if needed, but for now we keep collectionName clean.
-
+                // collectionName = `${collectionName} (Contexto: ${candidatesNames})`; 
             } else {
                 console.log(`[Webhook] Active Campaign: "${primaryCampaign.name}" (ID: ${primaryCampaign.id})`);
             }
@@ -233,13 +227,7 @@ class WebhookController {
             let catalogPrice = produto.preco_catalogo ? parseFloat(produto.preco_catalogo) : null;
 
             // If no price from AI (or text-only), try to find in our catalog by product code
-            // Note: For text-only lists, AI might not extract code unless user typed it
-            // We can improve this later with search by name
             if (!catalogPrice && produto.codigo) {
-                // If we have candidates, try to find strictly in their catalogs first
-                // If multiple candidates, we iterate? Or just pass "null" campaignId to search ALL?
-                // Ideally search specifically.
-
                 if (candidates.length > 0) {
                     for (const cand of candidates) {
                         console.log(`[Webhook] Looking up code ${produto.codigo} in Campaign "${cand.name}" (ID: ${cand.id})...`);
@@ -273,13 +261,15 @@ class WebhookController {
 
                 try {
                     const assistResult = await catalogAssistant.searchCatalog(query, collectionName);
+
                     if (assistResult.encontrado && assistResult.produtos && assistResult.produtos.length > 0) {
                         const bestMatch = assistResult.produtos[0];
 
+                        // 1. EXTRACT PRICE
                         // Use size-specific price if available
                         if (!catalogPrice) {
                             if (bestMatch.tamanhos_precos && produto.tamanho) {
-                                // Simple logic to match size (can be improved)
+                                // Simple logic to match size
                                 const sizeKey = Object.keys(bestMatch.tamanhos_precos).find(k => k.includes(produto.tamanho));
                                 if (sizeKey) {
                                     catalogPrice = bestMatch.tamanhos_precos[sizeKey];
@@ -291,7 +281,44 @@ class WebhookController {
                             }
                         }
 
-                        // Update metadata if missing
+                        // 2. NEW: FILE-BASED CAMPAIGN RESOLUTION
+                        // If AI identifies the Source File, we switch to THAT Campaign!
+                        if (bestMatch.arquivo_origem) {
+                            console.log(`[Webhook] AI found product in file: "${bestMatch.arquivo_origem}". Checking Campaign...`);
+
+                            // Clean filename (remove extra text if AI added it)
+                            const cleanFileName = bestMatch.arquivo_origem.replace('.pdf', '').trim();
+
+                            try {
+                                const sourceCatalog = await CatalogProduct.findOne({
+                                    where: {
+                                        [Op.or]: [
+                                            { catalogName: { [Op.like]: `%${cleanFileName}%` } },
+                                            { pdfPath: { [Op.like]: `%${cleanFileName}%` } },
+                                            { name: { [Op.like]: `%${cleanFileName}%` } }
+                                        ]
+                                    }
+                                });
+
+                                if (sourceCatalog && sourceCatalog.campaignId) {
+                                    console.log(`[Webhook] CLICK! Matched file "${cleanFileName}" to Campaign ID ${sourceCatalog.campaignId} (${sourceCatalog.catalogName}). Switching Order Campaign.`);
+                                    campaignId = sourceCatalog.campaignId;
+
+                                    // Also fetch markup for this specific campaign
+                                    const specificCampaign = await Campaign.findByPk(campaignId);
+                                    if (specificCampaign) {
+                                        markupPercentage = specificCampaign.markupPercentage ?? 35;
+                                        collectionName = specificCampaign.name; // Use the REAL campaign name
+                                    }
+                                } else {
+                                    console.log(`[Webhook] Could not map file "${bestMatch.arquivo_origem}" to any known catalog/campaign.`);
+                                }
+                            } catch (lookupErr) {
+                                console.error('[Webhook] Error looking up source file campaign:', lookupErr);
+                            }
+                        }
+
+                        // 3. Update metadata if missing
                         if (!produto.codigo && bestMatch.codigo) produto.codigo = bestMatch.codigo;
                         if (!produto.descricao && bestMatch.nome) produto.descricao = bestMatch.nome;
 
@@ -301,11 +328,9 @@ class WebhookController {
                             console.log(`[Webhook] Assistant found Color Code: ${produto.codigo_cor}`);
                         }
 
-                        // RE-VERIFY CAMPAIGN IF CODE FOUND
-                        // If AI found a code that we didn't have, check which campaign it belongs to
+                        // 4. VERIFY CAMPAIGN IF CODE FOUND (Candidates Check)
                         if (bestMatch.codigo && candidates.length > 0) {
                             for (const cand of candidates) {
-                                // Light check against local DB to see if this code exists in this campaign
                                 const exists = await CatalogController.getProductPrice(bestMatch.codigo, null, cand.id);
                                 if (exists) {
                                     campaignId = cand.id;
@@ -335,8 +360,6 @@ class WebhookController {
             }
 
             // Build product description
-            // Format: 2000711 - Jaqueta Nylon (Tam: 2),(Cor: 0452 Off White) - Milon Inverno Jan 26
-            // collectionName is already resolved from Campaign or Settings above
             let productDescription = '';
 
             if (produto.codigo) {
@@ -526,6 +549,7 @@ class WebhookController {
             res.status(500).json({ error: 'Internal error' });
         }
     }
+
     /**
      * Helper to find active campaigns for a specific chat ID (Group or Private)
      */
@@ -558,7 +582,6 @@ class WebhookController {
             return [];
         }
     }
-
 }
 
 module.exports = new WebhookController();

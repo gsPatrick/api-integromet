@@ -269,6 +269,7 @@ class CatalogAssistantService {
                                 "preco": 99.90, 
                                 "tamanhos_precos": { "P": 89.90, "M": 99.90, "G": 109.90 }, 
                                 "codigo_cor": "código da cor se houver",
+                                "arquivo_origem": "Nome do arquivo PDF onde foi encontrado (Ex: catalogo_verao.pdf)",
                                 "confianca": "alta/media/baixa"
                             }
                         ],
