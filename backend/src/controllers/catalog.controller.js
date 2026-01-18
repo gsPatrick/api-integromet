@@ -137,11 +137,15 @@ class CatalogController {
                             const name = p.name || `${catalogName} - Ref ${code}`;
 
                             try {
-                                // Upsert to update price if exists or create new
+                                // Upsert: Map generic price to legacy size fields to ensure compatibility
                                 const [prod, created] = await CatalogProduct.upsert({
                                     code,
                                     name,
-                                    price,
+                                    // Map single price to all slots
+                                    price_1_3: price,
+                                    price_4_8: price,
+                                    price_10_12: price,
+
                                     catalogName,
                                     campaignId, // VITAL: Bind to campaign
                                     isActive: true,
