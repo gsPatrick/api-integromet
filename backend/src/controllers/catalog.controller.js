@@ -79,7 +79,7 @@ class CatalogController {
 
             const pdfPath = req.file.path;
             const catalogName = req.body.catalogName || req.file.originalname.replace('.pdf', '');
-            const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : null;
+            const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : 18; // Default: 18 (Users Request)
 
             console.log(`[CatalogController] Processing PDF: ${catalogName} (Campaign ID: ${campaignId})`);
 
