@@ -429,15 +429,17 @@ class CatalogAssistantService {
         
         SAÍDA (JSON Puro):
         [
-            { "code": "REF123", "price": 99.90 },
-            { "code": "REF124", "price": 109.90 }
+            { "code": "REF123", "name": "Nome do Produto", "price": 99.90 },
+            { "code": "TOP LUCY", "name": "Top Lucy", "price": 122.00 }
         ]
         
         Regras:
         1. Ignore "R$".
-        2. Liste o máximo que conseguir encontrar.
-        3. Se não encontrar, retorne [].
-        4. NÃO explique, NÃO cite fontes. APENAS JSON.
+        2. Se não houver um código (REF) explícito, **USE O NOME DO PRODUTO** no campo "code".
+           Exemplo: Se o texto for "TOP LUCY R$122,00", então code="TOP LUCY", name="Top Lucy", price=122.00.
+        3. Liste o máximo que conseguir encontrar.
+        4. Se não encontrar, retorne [].
+        5. NÃO explique, NÃO cite fontes. APENAS JSON.
         `;
 
         try {
