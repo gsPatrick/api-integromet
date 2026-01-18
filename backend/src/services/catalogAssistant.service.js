@@ -94,7 +94,8 @@ class CatalogAssistantService {
                 name: "Assistente de Catálogo",
                 instructions: instructions,
                 model: "gpt-4o",
-                tools: [{ type: "file_search" }],
+                model: "gpt-4o",
+                tools: [{ type: "file_search" }, { type: "code_interpreter" }],
                 tool_resources: {
                     file_search: {
                         vector_store_ids: [this.vectorStoreId]
@@ -111,15 +112,92 @@ class CatalogAssistantService {
             try {
                 await this.openai.beta.assistants.update(this.assistantId, {
                     instructions: instructions,
-                    model: "gpt-4o" // Ensure using capable model
+                    model: "gpt-4o", // Ensure using capable model
+                    tools: [{ type: "file_search" }, { type: "code_interpreter" }]
                 });
-                console.log('[CatalogAssistant] Assistant instructions updated with Dual PDF capabilities');
+                console.log('[CatalogAssistant] Assistant instructions updated with Dual PDF capabilities + Code Interpreter');
             } catch (e) {
                 console.warn('[CatalogAssistant] Failed to update instructions:', e.message);
             }
         }
 
         this.isInitialized = true;
+    }
+
+    // ... uploadCatalogPdf ...
+
+    // ... searchCatalog ...
+
+    // ... analyzeOrder ...
+
+    /**
+     * Extracts ALL products from a specific file using Code Interpreter
+     * Used for populating the database after upload
+     */
+    async extractAllProducts(fileId) {
+        await this.initialize();
+        console.log(`[CatalogAssistant] Extracting ALL products from Ref File: ${fileId}`);
+
+        const prompt = `
+        ANALISE O ARQUIVO ANEXADO (ID: ${fileId}).
+        
+        OBJETIVO:
+        Extrair TODOS os produtos (Código/Ref e Preço) deste catálogo PDF.
+        Catálogos podem ser visuais. Use Python (Code Interpreter) para ler texto e tabelas se necessário, ou File Search.
+
+        SAÍDA OBRIGATÓRIA (JSON Puro):
+        [
+            { "code": "REF123", "price": 99.90, "name": "Nome Opcional" },
+            { "code": "REF124", "price": 109.90 }
+        ]
+        
+        Regras:
+        1. Ignore símbolos de moeda (R$). Use ponto para decimais.
+        2. Seja exaustivo. Tente listar TUDO o que encontrar.
+        3. Se não encontrar nada, retorne [].
+        `;
+
+        try {
+            const thread = await this.openai.beta.threads.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt,
+                        attachments: [
+                            { file_id: fileId, tools: [{ type: "code_interpreter" }, { type: "file_search" }] }
+                        ]
+                    }
+                ]
+            });
+
+            // Start Run
+            const run = await this.openai.beta.threads.runs.createAndPoll(
+                thread.id,
+                { assistant_id: this.assistantId }
+            );
+
+            if (run.status === 'completed') {
+                const messages = await this.openai.beta.threads.messages.list(thread.id);
+                const responseText = messages.data[0].content[0].text.value;
+
+                // Extract JSON array
+                const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+                if (jsonMatch) {
+                    const products = JSON.parse(jsonMatch[0]);
+                    console.log(`[CatalogAssistant] Extracted ${products.length} products via Assistant.`);
+                    return products;
+                }
+
+                console.warn('[CatalogAssistant] No JSON array found in response:', responseText.substring(0, 100));
+                return [];
+            } else {
+                console.error('[CatalogAssistant] Extraction run failed:', run.status);
+                return [];
+            }
+        } catch (e) {
+            console.error('[CatalogAssistant] Extraction Error:', e.message);
+            return [];
+        }
     }
 
     /**

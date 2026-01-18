@@ -200,19 +200,29 @@ class CatalogMarkupService {
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // If no prices found via text extraction, try Vision API
+        // If no prices found via text extraction, try Vision API (Gemini Image Edit)
         if (prices.length === 0) {
-            console.log(`[CatalogMarkup] No text prices found. Trying Image-based OCR (Tesseract)...`);
-
-            // Get page dimensions for coordinate mapping
-            const firstPage = pages[0];
-            const { width, height } = firstPage.getSize();
+            console.log(`[CatalogMarkup] No text prices found. Using Gemini Image Editing (ocr_service.py)...`);
 
             try {
-                prices = await pdfParserAIService.extractPricesFromImagePdf(pdfBuffer, width, height);
-                console.log(`[CatalogMarkup] Vision extracted ${prices.length} prices`);
+                // Generate output filename
+                const originalName = path.basename(pdfPath, '.pdf');
+                const outputFilename = `${originalName}_markup_${markupPercentage}pct_${Date.now()}.pdf`;
+                const outputFullPath = path.join(this.outputDir, outputFilename);
+
+                // Call Python Script
+                await pdfParserAIService.executeGeminiMarkup(pdfPath, outputFullPath, markupPercentage);
+
+                // If successful, return directly (Python did all the work)
+                return {
+                    outputPath: outputFullPath,
+                    outputFilename: outputFilename,
+                    pricesUpdated: 999 // Unknown count, but successful
+                };
+
             } catch (visionError) {
-                console.error(`[CatalogMarkup] Vision extraction failed:`, visionError.message);
+                console.error(`[CatalogMarkup] Gemini extraction failed:`, visionError.message);
+                throw visionError;
             }
         }
 

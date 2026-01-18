@@ -169,12 +169,16 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) > 1:
-        with open(sys.argv[1], "rb") as f:
+        input_pdf = sys.argv[1]
+        output_pdf = sys.argv[2] if len(sys.argv) > 2 else "output_gemini.pdf"
+        markup_pct = float(sys.argv[3]) if len(sys.argv) > 3 else 40.0
+
+        with open(input_pdf, "rb") as f:
             pdf_bytes = f.read()
             
-        result = process_pdf(pdf_bytes, 40.0)
+        print(f"Starting Gemini processing for {input_pdf} with {markup_pct}% markup...")
+        result = process_pdf(pdf_bytes, markup_pct)
         
-        output = sys.argv[2] if len(sys.argv) > 2 else "output_gemini.pdf"
-        with open(output, "wb") as f:
+        with open(output_pdf, "wb") as f:
             f.write(result)
-        print(f"Saved to {output}")
+        print(f"Saved to {output_pdf}")

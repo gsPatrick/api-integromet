@@ -83,11 +83,13 @@ class CatalogController {
 
             console.log(`[CatalogController] Processing PDF: ${catalogName} (Campaign ID: ${campaignId})`);
 
+            let fileId = null;
+
             // 1. Upload to OpenAI Assistant Vector Store (Critical)
             try {
                 console.log('[CatalogController] Uploading to OpenAI Assistant...');
-                await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
-                console.log('[CatalogController] Uploaded to OpenAI Assistant successfully');
+                fileId = await catalogAssistant.uploadCatalogPdf(pdfPath, catalogName);
+                console.log('[CatalogController] Uploaded to OpenAI Assistant successfully. File ID:', fileId);
             } catch (assistError) {
                 console.error('[CatalogController] Assistant upload failed:', assistError);
                 return res.status(500).json({ error: 'Failed to upload to OpenAI: ' + assistError.message });
@@ -108,47 +110,54 @@ class CatalogController {
                 console.warn('[CatalogController] Metadata creation warning:', metaError.message);
             }
 
-            // 3. Trigger Background Extraction for Local DB
-            // Using PdfParserAIService
-            (async () => {
-                try {
-                    const PdfParserAIService = require('../services/pdfParserAI.service');
-                    const parser = new PdfParserAIService();
-                    const buffer = fs.readFileSync(pdfPath);
+            // 3. Trigger Background Extraction via OpenAI Assistant (Code Interpreter)
+            if (fileId) {
+                (async () => {
+                    try {
+                        console.log(`[CatalogController] Starting OpenAI Extraction for ${catalogName} (File ${fileId})...`);
 
-                    console.log(`[CatalogController] Extracting products locally for ${catalogName}...`);
-                    const productsMap = await parser.parsePricePdf(buffer);
+                        const extractedProducts = await catalogAssistant.extractAllProducts(fileId);
+                        console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI.`);
 
-                    let savedCount = 0;
-                    for (const [code, variants] of productsMap) {
-                        if (!variants || variants.length === 0) continue;
-                        const price = variants[0].price;
+                        let savedCount = 0;
+                        for (const p of extractedProducts) {
+                            if (!p.code) continue;
 
-                        // Check Duplicate
-                        const existing = await CatalogProduct.findOne({
-                            where: { code, campaignId }
-                        });
+                            // Normalize price
+                            let price = 0;
+                            if (typeof p.price === 'number') {
+                                price = p.price;
+                            } else if (typeof p.price === 'string') {
+                                let priceStr = p.price.replace('R$', '').trim().replace(',', '.');
+                                price = parseFloat(priceStr);
+                            }
+                            if (isNaN(price)) price = 0;
 
-                        if (existing) {
-                            await existing.update({ price, catalogName, isActive: true });
-                        } else {
-                            await CatalogProduct.create({
-                                code,
-                                name: `${catalogName} - Ref ${code}`,
-                                price,
-                                catalogName,
-                                campaignId,
-                                isActive: true,
-                                category: 'Imported'
-                            });
+                            const code = String(p.code).trim().replace(/['"]/g, ''); // Clean quotes
+                            const name = p.name || `${catalogName} - Ref ${code}`;
+
+                            try {
+                                // Upsert to update price if exists or create new
+                                const [prod, created] = await CatalogProduct.upsert({
+                                    code,
+                                    name,
+                                    price,
+                                    catalogName,
+                                    campaignId, // VITAL: Bind to campaign
+                                    isActive: true,
+                                    category: 'Imported'
+                                }, { returning: true });
+                                savedCount++;
+                            } catch (err) {
+                                console.error(`[CatalogController] Error saving product ${code}:`, err.message);
+                            }
                         }
-                        savedCount++;
+                        console.log(`[CatalogController] Saved ${savedCount} products to database linked to Campaign ${campaignId}.`);
+                    } catch (bgError) {
+                        console.error('[CatalogController] Background extraction failed:', bgError);
                     }
-                    console.log(`[CatalogController] Local extraction saved ${savedCount} products.`);
-                } catch (bgError) {
-                    console.error('[CatalogController] Background extraction failed:', bgError);
-                }
-            })();
+                })();
+            }
 
             res.json({
                 success: true,
