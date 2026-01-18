@@ -122,6 +122,11 @@ class WebhookController {
 
             aiResult = await aiService.analyzeTextOrder(userText, contextMessages);
 
+            if (!aiResult) {
+                console.warn('[Webhook] AI Service returned null (possibly invalid JSON). processing skipped.');
+                return { status: 'skipped', reason: 'ai_error' };
+            }
+
             // If it refers to previous image, we need that image URL for order record
             if (aiResult.referencia_imagem_anterior) {
                 const lastImage = contextMessages.find(m => m.imageUrl && m.messageType !== 'text');
