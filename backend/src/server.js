@@ -332,11 +332,43 @@ app.get('/bling/clients/search', async (req, res) => {
         const axios = require('axios');
         const { phone, term } = req.query;
 
+        const token = await blingService.getValidToken();
+
+        // 1. If No Parameters: Fetch Default List (Recent 100)
         if (!phone && !term) {
-            return res.status(400).json({ error: 'phone or term query param required' });
+            try {
+                console.log('[BlingClientSearch] Fetching default list (100)...');
+                const response = await axios.get(
+                    `https://api.bling.com.br/Api/v3/contatos?limite=100`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                const clients = response.data.data || [];
+                const foundClients = new Map();
+                for (const c of clients) {
+                    foundClients.set(c.id, {
+                        id: c.id,
+                        nome: c.nome,
+                        cpfCnpj: c.numeroDocumento || '',
+                        telefone: c.telefone || '',
+                        celular: c.celular || '',
+                        email: c.email || ''
+                    });
+                }
+
+                return res.json({
+                    term: '',
+                    phone: '',
+                    totalResults: foundClients.size,
+                    clients: Array.from(foundClients.values())
+                });
+
+            } catch (err) {
+                console.error('[BlingClientSearch] Default fetch error:', err.message);
+                return res.json({ totalResults: 0, clients: [] });
+            }
         }
 
-        const token = await blingService.getValidToken();
         const foundClients = new Map(); // Use Map to avoid duplicates
 
         // 1. Search by Term (Name, CPF, Email, manual Phone)
