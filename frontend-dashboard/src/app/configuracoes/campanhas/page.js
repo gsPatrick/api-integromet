@@ -693,7 +693,7 @@ export default function CampaignsPage() {
                                         <div className="grid grid-cols-1 gap-6">
                                             {/* Visual PDF */}
                                             <div className="space-y-2">
-                                                <label className="block text-sm font-bold text-gray-700">Catálogo Visual (PDF)</label>
+                                                <label className="block text-sm font-bold text-gray-700">Catálogo Visual (PDF) (v2)</label>
                                                 <div
                                                     onClick={() => visualInputRef.current?.click()}
                                                     className={`group border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${visualFile ? 'border-green-400 bg-green-50/50' : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50/30'}`}
@@ -710,7 +710,7 @@ export default function CampaignsPage() {
 
 
                                                 {/* EXISTING FILE SYNC OPTION */}
-                                                {editingId && campaigns.find(c => c.id === editingId)?.visualPdfPath && (
+                                                {editingId && campaigns.find(c => c.id == editingId)?.visualPdfPath && (
                                                     <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
                                                         <div className="flex items-center gap-2 overflow-hidden">
                                                             <FileText size={16} className="text-blue-500 shrink-0" />
