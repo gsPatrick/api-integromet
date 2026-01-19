@@ -716,7 +716,7 @@ export default function CampaignsPage() {
                                                             <FileText size={16} className="text-blue-500 shrink-0" />
                                                             <div className="text-xs text-blue-900 truncate">
                                                                 <span className="font-bold block mb-0.5">Arquivo Atual:</span>
-                                                                {campaigns.find(c => c.id === editingId).visualPdfPath.split(/[/\\]/).pop()}
+                                                                {campaigns.find(c => c.id == editingId).visualPdfPath.split(/[/\\]/).pop()}
                                                             </div>
                                                         </div>
                                                         <button
