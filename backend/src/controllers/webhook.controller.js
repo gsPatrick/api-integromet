@@ -236,15 +236,49 @@ class WebhookController {
                             catalogPrice = parseFloat(lookup);
                             campaignId = cand.id; // Correctly assign order to THIS campaign
                             markupPercentage = cand.markupPercentage ?? 35; // Update markup to match this campaign
+                            collectionName = cand.name; // UPDATE COLLECTION NAME TOO!
                             console.log(`[Webhook] Found in Campaign "${cand.name}"! Price: R$${catalogPrice}`);
                             break; // Stop looking
                         }
                     }
-                } else {
-                    // Global lookup
-                    console.log(`[Webhook] Looking up code ${produto.codigo} globally...`);
-                    const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
-                    if (lookup) catalogPrice = parseFloat(lookup);
+                }
+
+                // If still no price, try global lookup (search ALL campaigns)
+                if (!catalogPrice) {
+                    console.log(`[Webhook] Looking up code ${produto.codigo} globally (all campaigns)...`);
+
+                    // Find the product globally to get its campaignId
+                    const CatalogProduct = require('../models/CatalogProduct');
+                    const globalProduct = await CatalogProduct.findOne({
+                        where: {
+                            code: { [Op.like]: `%${produto.codigo}%` },
+                            isActive: true
+                        },
+                        order: [['createdAt', 'DESC']]
+                    });
+
+                    if (globalProduct && globalProduct.campaignId) {
+                        // Found product - get its campaign
+                        const productCampaign = await Campaign.findByPk(globalProduct.campaignId);
+
+                        if (productCampaign) {
+                            // UPDATE ALL CAMPAIGN FIELDS - This is the key fix!
+                            campaignId = productCampaign.id;
+                            markupPercentage = productCampaign.markupPercentage ?? 35;
+                            collectionName = productCampaign.name;
+
+                            // Get price based on size
+                            const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, campaignId);
+                            if (lookup) catalogPrice = parseFloat(lookup);
+
+                            console.log(`[Webhook] ✓ Found product in Campaign "${productCampaign.name}" (ID: ${productCampaign.id})! Price: R$${catalogPrice || 'N/A'}`);
+                        }
+                    } else if (globalProduct) {
+                        // Product found but has no campaignId - use price but keep current campaign
+                        const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
+                        if (lookup) catalogPrice = parseFloat(lookup);
+                        console.log(`[Webhook] Product found globally but has no campaignId. Price: R$${catalogPrice || 'N/A'}`);
+                    }
                 }
             }
 
