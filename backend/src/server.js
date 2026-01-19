@@ -164,6 +164,46 @@ app.get('/debug/assistant-source', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: List all files in Vector Store
+app.get('/debug/assistant-files', async (req, res) => {
+    try {
+        const service = require('./services/catalogAssistant.service');
+        await service.initialize();
+
+        if (!service.vectorStoreId) {
+            return res.status(404).json({ error: 'Vector Store ID not initialized' });
+        }
+
+        const vsFiles = await service.openai.beta.vectorStores.files.list(
+            service.vectorStoreId
+        );
+
+        const fileDetails = [];
+        for (const f of vsFiles.data) {
+            try {
+                const fileObj = await service.openai.files.retrieve(f.id);
+                fileDetails.push({
+                    id: f.id,
+                    name: fileObj.filename,
+                    status: f.status,
+                    created_at: new Date(fileObj.created_at * 1000).toISOString()
+                });
+            } catch (e) {
+                fileDetails.push({ id: f.id, error: 'File not found details' });
+            }
+        }
+
+        res.json({
+            vectorStoreId: service.vectorStoreId,
+            count: fileDetails.length,
+            files: fileDetails
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Resync orders to Bling (delete old and recreate)
 app.get('/debug/resync-bling', async (req, res) => {
     try {
