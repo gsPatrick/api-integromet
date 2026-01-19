@@ -459,17 +459,28 @@ class WebhookController {
                             if (sourceCatalog && sourceCatalog.campaignId) {
                                 // Found via product
                             } else {
-                                console.log(`[Webhook] No product found for file "${cleanFileName}". Searching Campaigns directly...`);
+                                console.log(`[Webhook] No product found for file "${cleanFileName}". Searching Campaigns directly (Fuzzy Match)...`);
+
                                 const campaigns = await Campaign.findAll({ where: { isActive: true } });
-                                const matchedCamp = campaigns.find(c =>
-                                    c.visualPdfPath && (
-                                        c.visualPdfPath.includes(cleanFileName) ||
-                                        cleanFileName.includes(path.basename(c.visualPdfPath).replace('.pdf', ''))
-                                    )
-                                );
+
+                                // SMART MATCHING LOGIC
+                                // 1. Remove extension and special chars, lowercase
+                                const normalize = (str) => str.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                const aiNameSimple = normalize(cleanFileName);
+
+                                const matchedCamp = campaigns.find(c => {
+                                    if (!c.visualPdfPath) return false;
+
+                                    const diskName = require('path').basename(c.visualPdfPath);
+                                    const diskNameSimple = normalize(diskName);
+
+                                    // Check if one contains the other (robust against "catalog-" prefix or dates)
+                                    // e.g. ai="emporio" disk="catalog-emporio-123" -> disk.includes(ai) = true
+                                    return diskNameSimple.includes(aiNameSimple) || aiNameSimple.includes(diskNameSimple);
+                                });
 
                                 if (matchedCamp) {
-                                    console.log(`[Webhook] Found Campaign via visualPdfPath: "${matchedCamp.name}"`);
+                                    console.log(`[Webhook] Found Campaign via visualPdfPath (Fuzzy): "${matchedCamp.name}"`);
                                     campaignByFile = matchedCamp;
                                 }
                             }

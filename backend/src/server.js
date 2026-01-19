@@ -605,7 +605,8 @@ const pdfStorage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'catalog-' + uniqueSuffix + '.pdf');
+        const saneName = file.originalname.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 50);
+        cb(null, 'catalog-' + saneName + '-' + uniqueSuffix + '.pdf');
     }
 });
 const pdfUpload = multer({
