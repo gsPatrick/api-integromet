@@ -627,6 +627,7 @@ app.post('/campaigns/:id/upload', pdfUpload.fields([
     { name: 'pricePdf', maxCount: 20 }
 ]), campaignController.uploadFiles);
 app.post('/campaigns/:id/generate', campaignController.generateCatalog);
+app.post('/campaigns/:id/fix-pdf-filename', campaignController.fixPdfFilename);
 
 app.get('/catalog', catalogController.listProducts);
 app.get('/catalog/status', catalogController.getStatus);

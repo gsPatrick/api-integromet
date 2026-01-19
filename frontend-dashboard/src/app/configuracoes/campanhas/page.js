@@ -219,6 +219,18 @@ export default function CampaignsPage() {
         }
     };
 
+    const handleFixPdfName = async (id) => {
+        if (!confirm('Isso vai renomear o arquivo do catálogo para incluir o nome da campanha (para facilitar a IA). Continuar?')) return;
+        try {
+            await api.post(`/campaigns/${id}/fix-pdf-filename`);
+            alert('Arquivo renomeado e sincronizado com sucesso! A IA agora conseguirá identificar esta campanha.');
+            fetchCampaigns();
+        } catch (error) {
+            console.error('Error fixing pdf name', error);
+            alert('Erro ao sincronizar nome: ' + (error.response?.data?.error || error.message));
+        }
+    };
+
     // Derived State
     // Support multiple active campaigns
     const activeCampaigns = campaigns.filter(c => c.isActive);
@@ -695,6 +707,28 @@ export default function CampaignsPage() {
                                                     </span>
                                                     <span className="text-xs text-gray-400 mt-1 block">PDF até 100MB</span>
                                                 </div>
+
+
+                                                {/* EXISTING FILE SYNC OPTION */}
+                                                {editingId && campaigns.find(c => c.id === editingId)?.visualPdfPath && (
+                                                    <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <FileText size={16} className="text-blue-500 shrink-0" />
+                                                            <div className="text-xs text-blue-900 truncate">
+                                                                <span className="font-bold block mb-0.5">Arquivo Atual:</span>
+                                                                {campaigns.find(c => c.id === editingId).visualPdfPath.split(/[/\\]/).pop()}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleFixPdfName(editingId)}
+                                                            className="text-xs bg-white border border-blue-200 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg font-bold transition-colors shrink-0 flex items-center gap-1 shadow-sm"
+                                                            title="Renomear arquivo para incluir nome da campanha (Ajuda na IA)"
+                                                        >
+                                                            <Settings size={12} /> Sincronizar Nome
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

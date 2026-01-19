@@ -251,3 +251,58 @@ exports.deleteCampaign = async (req, res) => {
         return res.status(500).json({ error: 'Failed to delete campaign' });
     }
 };
+
+exports.fixPdfFilename = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const campaign = await Campaign.findByPk(id);
+
+        if (!campaign || !campaign.visualPdfPath) {
+            return res.status(404).json({ error: 'Campaign or PDF not found' });
+        }
+
+        const currentPath = campaign.visualPdfPath;
+        const fs = require('fs');
+        if (!fs.existsSync(currentPath)) {
+            return res.status(404).json({ error: 'File does not exist on disk' });
+        }
+
+        const path = require('path');
+        const oldFilename = path.basename(currentPath);
+
+        // Sanitize Campaign Name
+        const saneCampName = campaign.name.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 50);
+
+        const timestamp = Date.now();
+        const newFilename = `catalog-${saneCampName}-${timestamp}.pdf`;
+        const newPath = path.join(path.dirname(currentPath), newFilename);
+
+        // Rename File
+        fs.renameSync(currentPath, newPath);
+        console.log(`[CampaignController] Renamed legacy PDF: ${oldFilename} -> ${newFilename}`);
+
+        // Update Campaign
+        campaign.visualPdfPath = newPath;
+        await campaign.save();
+
+        // Update Metadata (CatalogProduct)
+        const CatalogProduct = require('../models/CatalogProduct');
+        await CatalogProduct.upsert({
+            code: 'CATALOG_META',
+            name: `Catálogo: ${campaign.name}`,
+            category: 'METADATA',
+            catalogName: newFilename.replace('.pdf', ''),
+            pdfPath: newPath,
+            isActive: true,
+            campaignId: campaign.id
+        });
+
+        console.log(`[CampaignController] Fixed PDF link for Campaign ${campaign.name}`);
+
+        res.json({ success: true, newPath });
+
+    } catch (error) {
+        console.error('Error fixing PDF filename:', error);
+        res.status(500).json({ error: 'Failed to fix PDF filename' });
+    }
+};
