@@ -141,6 +141,29 @@ app.get('/debug/fix-names', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Test Assistant Source Identification
+app.get('/debug/assistant-source', async (req, res) => {
+    try {
+        const catalogAssistant = require('./services/catalogAssistant.service');
+        const query = req.query.q; // e.g. "Código 1228"
+        const context = req.query.c || 'Pronta Entrega';
+
+        if (!query) return res.status(400).json({ error: 'Missing query param q' });
+
+        console.log(`[Debug] Testing Assistant Search for: "${query}" in Context: "${context}"`);
+        const result = await catalogAssistant.searchCatalog(query, context);
+
+        res.json({
+            query,
+            context,
+            result
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: Resync orders to Bling (delete old and recreate)
 app.get('/debug/resync-bling', async (req, res) => {
     try {
