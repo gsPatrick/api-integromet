@@ -226,49 +226,40 @@ class BlingService {
                     sku = parts.join('-');
                 }
 
-                // 2. Find or Create Product (Only if not a virtual WAPP SKU)
-                // We skip product creation for 'WAPP-...' SKUs to avoid cluttering Bling with 1-off products
-                // and to avoid "Code already exists" validation errors on retries.
-                const isVirtualSku = sku.startsWith('WAPP-');
+                // 2. Find or Create Product (ALWAYS)
+                // We verify if the product exists. If not, we create it.
+                // This ensures the item in the order is linked to a registered product ("Produto encontrado").
 
-                if (!isVirtualSku) {
-                    let product = await this._findProduct(token, sku);
-                    if (!product) {
-                        // Create it
-                        // Use productRaw as name if available, just cleaning [Code] if old format
-                        let productName = order.productRaw || 'Produto WhatsApp';
+                let product = await this._findProduct(token, sku);
+                if (!product) {
+                    // Create it
+                    // Use productRaw as name if available, cleaning old format [Code]
+                    let productName = order.productRaw || 'Produto WhatsApp';
 
-                        // If old format [Code], clean it for name
-                        if (productName.startsWith('[')) {
-                            productName = productName.replace(/^\[[\w-]+\]\s*/, '') +
-                                ((order.extractedColor || order.extractedSize) ? ` (${[order.extractedColor, order.extractedSize].filter(Boolean).join(', ')})` : '');
-                        }
-
-                        product = await this._createProduct(token, {
-                            sku: sku,
-                            nome: productName,
-                            price: order.sellPrice || 0
-                        });
+                    // If old format [Code], clean it for name
+                    if (productName.startsWith('[')) {
+                        productName = productName.replace(/^\[[\w-]+\]\s*/, '') +
+                            ((order.extractedColor || order.extractedSize) ? ` (${[order.extractedColor, order.extractedSize].filter(Boolean).join(', ')})` : '');
                     }
+
+                    product = await this._createProduct(token, {
+                        sku: sku,
+                        nome: productName,
+                        price: order.sellPrice || 0,
+                        description: order.productRaw // Use full raw text as short description
+                    });
                 }
 
                 // 3. Add to Order Items
-                // Just use productRaw as description. It is usually well formatted by Webhook.
+                // Just use productRaw as description.
                 let customDesc = order.productRaw || 'Produto WhatsApp';
 
-                // Removed logic that appended global campaign suffix here.
-                // We trust WebhookController to have already formatted productRaw correctly with the specific campaign context.
-                // Appending global setting here causes "Double Campaign" names (e.g. "Skip Hop - Precoce").
-
                 const itemPayload = {
+                    codigo: sku, // LINK THE PRODUCT!
                     descricao: customDesc,
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
                     unidade: 'UN'
-                    // NEVER send 'codigo' to Bling for these items.
-                    // If we send 'codigo' and it matches an existing product, Bling validation fails with "Code already exists" 
-                    // unless we link the product ID. But if we link the product ID, Bling OVERRIDES our custom description.
-                    // The only way to have custom description AND avoid validation errors is to send NO code (generic item).
                 };
 
                 // Note: We intentionally DON'T link produto.id because Bling overrides 
