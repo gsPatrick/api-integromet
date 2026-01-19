@@ -444,32 +444,49 @@ class WebhookController {
                             // Clean filename (remove extra text if AI added it)
                             const cleanFileName = bestMatch.arquivo_origem.replace(/\.pdf$/i, '').trim();
 
-                            try {
-                                const sourceCatalog = await CatalogProduct.findOne({
-                                    where: {
-                                        [Op.or]: [
-                                            { catalogName: { [Op.like]: `%${cleanFileName}%` } },
-                                            { pdfPath: { [Op.like]: `%${cleanFileName}%` } },
-                                            { name: { [Op.like]: `%${cleanFileName}%` } }
-                                        ]
-                                    }
-                                });
-
-                                if (sourceCatalog && sourceCatalog.campaignId) {
-                                    console.log(`[Webhook] CLICK! Matched file "${cleanFileName}" to Campaign ID ${sourceCatalog.campaignId} (${sourceCatalog.catalogName}). Switching Order Campaign.`);
-                                    campaignId = sourceCatalog.campaignId;
-
-                                    // Also fetch markup for this specific campaign
-                                    const specificCampaign = await Campaign.findByPk(campaignId);
-                                    if (specificCampaign) {
-                                        markupPercentage = specificCampaign.markupPercentage ?? 35;
-                                        collectionName = specificCampaign.name; // Use the REAL campaign name
-                                    }
-                                } else {
-                                    console.log(`[Webhook] Could not map file "${bestMatch.arquivo_origem}" to any known catalog/campaign.`);
+                            // try to find campaign by matching catalogName or pdfPath
+                            let sourceCatalog = await CatalogProduct.findOne({
+                                where: {
+                                    [Op.or]: [
+                                        { catalogName: { [Op.like]: `%${cleanFileName}%` } },
+                                        { pdfPath: { [Op.like]: `%${cleanFileName}%` } }
+                                    ]
                                 }
-                            } catch (lookupErr) {
-                                console.error('[Webhook] Error looking up source file campaign:', lookupErr);
+                            });
+
+                            // Fallback: If not found in products, check Campaign visualPdfPath directly
+                            let campaignByFile = null;
+                            if (sourceCatalog && sourceCatalog.campaignId) {
+                                // Found via product
+                            } else {
+                                console.log(`[Webhook] No product found for file "${cleanFileName}". Searching Campaigns directly...`);
+                                const campaigns = await Campaign.findAll({ where: { isActive: true } });
+                                const matchedCamp = campaigns.find(c =>
+                                    c.visualPdfPath && (
+                                        c.visualPdfPath.includes(cleanFileName) ||
+                                        cleanFileName.includes(path.basename(c.visualPdfPath).replace('.pdf', ''))
+                                    )
+                                );
+
+                                if (matchedCamp) {
+                                    console.log(`[Webhook] Found Campaign via visualPdfPath: "${matchedCamp.name}"`);
+                                    campaignByFile = matchedCamp;
+                                }
+                            }
+
+                            if ((sourceCatalog && sourceCatalog.campaignId) || campaignByFile) {
+                                const newCampId = sourceCatalog ? sourceCatalog.campaignId : campaignByFile.id;
+                                console.log(`[Webhook] CLICK! Matched file "${cleanFileName}" to Campaign ID ${newCampId}. Switching Order Campaign.`);
+                                campaignId = newCampId;
+
+                                // Also fetch markup for this specific campaign
+                                const specificCampaign = await Campaign.findByPk(campaignId);
+                                if (specificCampaign) {
+                                    markupPercentage = specificCampaign.markupPercentage ?? 35;
+                                    collectionName = specificCampaign.name; // Use the REAL campaign name
+                                }
+                            } else {
+                                console.log(`[Webhook] Could not map file "${bestMatch.arquivo_origem}" to any known catalog/campaign.`);
                             }
                         }
 
