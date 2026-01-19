@@ -231,11 +231,12 @@ class OrderController {
 
             console.log(`[OrderController] Generating payment link for ${orders.length} orders, total: R$ ${totalValue.toFixed(2)}`);
 
-            // 4. Sync to Bling first (if not already synced)
+            // 4. Sync to Bling (ALWAYS try to sync, to allow updates/fixes)
             let blingId = null;
-            const unsyncedOrders = orders.filter(o => !o.blingSyncedAt);
+            // PREVIOUSLY: const unsyncedOrders = orders.filter(o => !o.blingSyncedAt);
+            // NOW: We allow re-syncing all orders to ensure corrections are sent.
 
-            if (unsyncedOrders.length > 0) {
+            if (orders.length > 0) {
                 try {
                     const blingResult = await blingService.executeOrder(orders);
 
