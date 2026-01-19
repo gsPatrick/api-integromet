@@ -378,7 +378,13 @@ class WebhookController {
             }
 
             if (needsAssistant) {
-                let query = produto.codigo ? `Código ${produto.codigo}` : produto.descricao;
+                // FIX: Combine Code + Description to avoid ambiguity (e.g. duplicate codes in different catalogs)
+                let query = '';
+                if (produto.codigo) query += `Código ${produto.codigo}`;
+                if (produto.descricao) query += ` ${produto.descricao}`;
+                query = query.trim();
+
+                if (!query) query = produto.descricao || 'Produto desconhecido';
                 if (produto.codigo_cor) query += ` cor ${produto.codigo_cor}`;
                 if (produto.tamanho) query += ` tamanho ${produto.tamanho}`;
 
