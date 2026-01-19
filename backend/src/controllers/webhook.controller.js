@@ -226,60 +226,145 @@ class WebhookController {
         for (const produto of produtos) {
             let catalogPrice = produto.preco_catalogo ? parseFloat(produto.preco_catalogo) : null;
 
-            // If no price from AI (or text-only), try to find in our catalog by product code
-            if (!catalogPrice && produto.codigo) {
-                if (candidates.length > 0) {
-                    for (const cand of candidates) {
-                        console.log(`[Webhook] Looking up code ${produto.codigo} in Campaign "${cand.name}" (ID: ${cand.id})...`);
-                        const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, cand.id);
-                        if (lookup) {
-                            catalogPrice = parseFloat(lookup);
-                            campaignId = cand.id; // Correctly assign order to THIS campaign
-                            markupPercentage = cand.markupPercentage ?? 35; // Update markup to match this campaign
-                            collectionName = cand.name; // UPDATE COLLECTION NAME TOO!
-                            console.log(`[Webhook] Found in Campaign "${cand.name}"! Price: R$${catalogPrice}`);
-                            break; // Stop looking
-                        }
+            // =================================================================
+            // COMPREHENSIVE PRODUCT SEARCH - TRY ALL METHODS
+            // =================================================================
+            const CatalogProduct = require('../models/CatalogProduct');
+            let productFound = false;
+
+            // METHOD 1: Search by code in candidate campaigns (group-specific)
+            if (!catalogPrice && produto.codigo && candidates.length > 0) {
+                for (const cand of candidates) {
+                    console.log(`[Webhook] [Method 1] Looking up code ${produto.codigo} in Campaign "${cand.name}" (ID: ${cand.id})...`);
+                    const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, cand.id);
+                    if (lookup) {
+                        catalogPrice = parseFloat(lookup);
+                        campaignId = cand.id;
+                        markupPercentage = cand.markupPercentage ?? 35;
+                        collectionName = cand.name;
+                        productFound = true;
+                        console.log(`[Webhook] ✓ [Method 1] Found in Campaign "${cand.name}"! Price: R$${catalogPrice}`);
+                        break;
                     }
                 }
+            }
 
-                // If still no price, try global lookup (search ALL campaigns)
-                if (!catalogPrice) {
-                    console.log(`[Webhook] Looking up code ${produto.codigo} globally (all campaigns)...`);
+            // METHOD 2: Search by code globally (all campaigns)
+            if (!catalogPrice && produto.codigo) {
+                console.log(`[Webhook] [Method 2] Looking up code ${produto.codigo} globally...`);
+                const globalProduct = await CatalogProduct.findOne({
+                    where: {
+                        code: { [Op.like]: `%${produto.codigo}%` },
+                        isActive: true
+                    },
+                    order: [['createdAt', 'DESC']]
+                });
 
-                    // Find the product globally to get its campaignId
-                    const CatalogProduct = require('../models/CatalogProduct');
-                    const globalProduct = await CatalogProduct.findOne({
+                if (globalProduct && globalProduct.campaignId) {
+                    const productCampaign = await Campaign.findByPk(globalProduct.campaignId);
+                    if (productCampaign) {
+                        campaignId = productCampaign.id;
+                        markupPercentage = productCampaign.markupPercentage ?? 35;
+                        collectionName = productCampaign.name;
+                        const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, campaignId);
+                        if (lookup) catalogPrice = parseFloat(lookup);
+                        productFound = true;
+                        console.log(`[Webhook] ✓ [Method 2] Found in Campaign "${productCampaign.name}" (ID: ${productCampaign.id})! Price: R$${catalogPrice || 'N/A'}`);
+                    }
+                }
+            }
+
+            // METHOD 3: Search by product name/description in catalog
+            if (!catalogPrice && produto.descricao) {
+                console.log(`[Webhook] [Method 3] Looking up by description "${produto.descricao.substring(0, 30)}..."...`);
+                const byName = await CatalogProduct.findOne({
+                    where: {
+                        [Op.or]: [
+                            { name: { [Op.like]: `%${produto.descricao}%` } },
+                            { rawText: { [Op.like]: `%${produto.descricao}%` } }
+                        ],
+                        isActive: true
+                    },
+                    order: [['createdAt', 'DESC']]
+                });
+
+                if (byName && byName.campaignId) {
+                    const productCampaign = await Campaign.findByPk(byName.campaignId);
+                    if (productCampaign) {
+                        campaignId = productCampaign.id;
+                        markupPercentage = productCampaign.markupPercentage ?? 35;
+                        collectionName = productCampaign.name;
+                        // Get price from the found product
+                        catalogPrice = parseFloat(byName.price_4_8 || byName.price_1_3 || byName.price_10_12 || 0);
+                        if (produto.codigo) produto.codigo = byName.code; // Update code if found
+                        productFound = true;
+                        console.log(`[Webhook] ✓ [Method 3] Found by name in Campaign "${productCampaign.name}"! Price: R$${catalogPrice}`);
+                    }
+                }
+            }
+
+            // METHOD 4: Search by catalogName matching any active campaign
+            if (!catalogPrice) {
+                console.log(`[Webhook] [Method 4] Looking for any product matching campaign catalogs...`);
+
+                // Get all active campaigns and their catalog names
+                const allActiveCampaigns = await Campaign.findAll({ where: { isActive: true } });
+
+                for (const camp of allActiveCampaigns) {
+                    // Check if any product exists with catalogName containing campaign name
+                    const byCatalog = await CatalogProduct.findOne({
                         where: {
-                            code: { [Op.like]: `%${produto.codigo}%` },
-                            isActive: true
-                        },
-                        order: [['createdAt', 'DESC']]
+                            [Op.and]: [
+                                { isActive: true },
+                                {
+                                    [Op.or]: [
+                                        { catalogName: { [Op.like]: `%${camp.name}%` } },
+                                        camp.visualPdfPath ? { pdfPath: { [Op.like]: `%${camp.visualPdfPath.split('/').pop()}%` } } : {}
+                                    ]
+                                },
+                                produto.codigo ? { code: { [Op.like]: `%${produto.codigo}%` } } : {}
+                            ]
+                        }
                     });
 
-                    if (globalProduct && globalProduct.campaignId) {
-                        // Found product - get its campaign
-                        const productCampaign = await Campaign.findByPk(globalProduct.campaignId);
+                    if (byCatalog) {
+                        campaignId = camp.id;
+                        markupPercentage = camp.markupPercentage ?? 35;
+                        collectionName = camp.name;
+                        catalogPrice = parseFloat(byCatalog.price_4_8 || byCatalog.price_1_3 || byCatalog.price_10_12 || 0);
+                        if (!produto.codigo && byCatalog.code) produto.codigo = byCatalog.code;
+                        productFound = true;
+                        console.log(`[Webhook] ✓ [Method 4] Found by catalog match in Campaign "${camp.name}"! Price: R$${catalogPrice}`);
+                        break;
+                    }
+                }
+            }
 
+            // METHOD 5: If product has code but no campaign found, search by exact code in ALL products
+            if (!productFound && produto.codigo) {
+                console.log(`[Webhook] [Method 5] Last resort - searching exact code ${produto.codigo} in ALL products...`);
+                const exactMatch = await CatalogProduct.findOne({
+                    where: { code: produto.codigo, isActive: true }
+                });
+
+                if (exactMatch) {
+                    if (exactMatch.campaignId) {
+                        const productCampaign = await Campaign.findByPk(exactMatch.campaignId);
                         if (productCampaign) {
-                            // UPDATE ALL CAMPAIGN FIELDS - This is the key fix!
                             campaignId = productCampaign.id;
                             markupPercentage = productCampaign.markupPercentage ?? 35;
                             collectionName = productCampaign.name;
-
-                            // Get price based on size
-                            const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho, campaignId);
-                            if (lookup) catalogPrice = parseFloat(lookup);
-
-                            console.log(`[Webhook] ✓ Found product in Campaign "${productCampaign.name}" (ID: ${productCampaign.id})! Price: R$${catalogPrice || 'N/A'}`);
+                            productFound = true;
                         }
-                    } else if (globalProduct) {
-                        // Product found but has no campaignId - use price but keep current campaign
-                        const lookup = await CatalogController.getProductPrice(produto.codigo, produto.tamanho);
-                        if (lookup) catalogPrice = parseFloat(lookup);
-                        console.log(`[Webhook] Product found globally but has no campaignId. Price: R$${catalogPrice || 'N/A'}`);
                     }
+                    catalogPrice = parseFloat(exactMatch.price_4_8 || exactMatch.price_1_3 || exactMatch.price_10_12 || 0);
+                    console.log(`[Webhook] ✓ [Method 5] Found exact match! Campaign: ${collectionName}, Price: R$${catalogPrice}`);
                 }
+            }
+
+            // FINAL: Log if still no product found (will go to current campaign, possibly Pronta Entrega)
+            if (!productFound && !catalogPrice) {
+                console.log(`[Webhook] ⚠️ NO PRODUCT FOUND after all 5 methods. Order will use current campaign: "${collectionName}" (ID: ${campaignId})`);
             }
 
             // 2. Fallback: Ask OpenAI Assistant (PDF Search)
