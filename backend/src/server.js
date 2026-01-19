@@ -174,7 +174,12 @@ app.get('/debug/assistant-files', async (req, res) => {
             return res.status(404).json({ error: 'Vector Store ID not initialized' });
         }
 
-        const vsFiles = await service.openai.beta.vectorStores.files.list(
+        const vsApi = service.openai.beta.vectorStores || service.openai.vectorStores;
+        if (!vsApi || !vsApi.files) {
+            return res.status(500).json({ error: 'OpenAI Client incompatible (no vectorStores.files)' });
+        }
+
+        const vsFiles = await vsApi.files.list(
             service.vectorStoreId
         );
 
