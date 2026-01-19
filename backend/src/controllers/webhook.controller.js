@@ -250,7 +250,13 @@ class WebhookController {
 
             // 2. Fallback: Ask OpenAI Assistant (PDF Search)
             // Trigger if: No price locally OR We suspect missing color details (have color name but no code)
-            const needsAssistant = !catalogPrice || (!produto.codigo_cor && (produto.cor || produto.tamanho));
+            let needsAssistant = !catalogPrice || (!produto.codigo_cor && (produto.cor || produto.tamanho));
+
+            // FORCE ASSISTANT if Ambiguous Campaign (Safe Harbor) -> We need 'arquivo_origem' to resolve it
+            if (campaignId === 18 && candidates.length > 1) {
+                console.log('[Webhook] Ambiguous campaign (Safe Harbor). Forcing Assistant to identify Source File.');
+                needsAssistant = true;
+            }
 
             if (needsAssistant) {
                 let query = produto.codigo ? `Código ${produto.codigo}` : produto.descricao;
