@@ -144,6 +144,8 @@ exports.uploadFiles = async (req, res) => {
                             });
                         }
                         console.log('[CampaignController] Products saved to DB.');
+                        console.log(`[CampaignController] ✅ SUCCESS: Linked PDF "${filename}" to Campaign "${campaign.name}" (ID: ${campaign.id})`);
+                        console.log(`[CampaignController] ℹ️  AI Lookup for this file will now resolve to this Campaign.`);
                     }
                 } catch (parseErr) {
                     console.error('[CampaignController] Local parse failed:', parseErr);
