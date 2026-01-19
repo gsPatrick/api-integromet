@@ -78,10 +78,41 @@ class CatalogController {
             }
 
             const pdfPath = req.file.path;
-            const catalogName = req.body.catalogName || req.file.originalname.replace('.pdf', '');
-            const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : 18; // Default: 18 (Users Request)
+            let catalogName = req.body.catalogName || req.file.originalname.replace('.pdf', '');
+            const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : 18; // Default: 18
 
-            console.log(`[CatalogController] Processing PDF: ${catalogName} (Campaign ID: ${campaignId})`);
+            console.log(`[CatalogController] Processing PDF Upload. Campaign ID: ${campaignId}`);
+
+            // 0. AUTO-RENAME Logic (Critical for AI Linking)
+            // We force the filename to match the Campaign Name so the AI can link them back.
+            if (campaignId) {
+                try {
+                    const campaign = await Campaign.findByPk(campaignId);
+                    if (campaign) {
+                        const safeCampaignName = campaign.name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]/g, '_')
+                            .replace(/_+/g, '_');
+
+                        const newFilename = `catalog-${safeCampaignName}-${Date.now()}.pdf`;
+                        const newPath = path.join(this.uploadDir, newFilename);
+
+                        console.log(`[CatalogController] Auto-renaming uploaded file to match Campaign: ${campaign.name}`);
+                        console.log(`[CatalogController] Old: ${pdfPath} -> New: ${newPath}`);
+
+                        fs.renameSync(pdfPath, newPath);
+
+                        // Update variables
+                        pdfPath = newPath;
+                        catalogName = newFilename.replace('.pdf', ''); // This name is used for AI metadata
+                    }
+                } catch (renameError) {
+                    console.error('[CatalogController] Auto-rename failed:', renameError);
+                    // Continue with original name if rename fails
+                }
+            }
+
+            console.log(`[CatalogController] Final Processing Name: ${catalogName}`);
 
             let fileId = null;
 
