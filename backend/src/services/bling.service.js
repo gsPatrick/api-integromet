@@ -254,17 +254,26 @@ class BlingService {
                 // Just use productRaw as description.
                 let customDesc = order.productRaw || 'Produto WhatsApp';
 
+                // Build the item payload - MUST use produto.id to reference existing product
+                // Without produto.id, Bling interprets 'codigo' as a NEW product to create
                 const itemPayload = {
-                    codigo: sku, // LINK THE PRODUCT!
                     descricao: customDesc,
                     quantidade: order.quantity || 1,
                     valor: order.sellPrice || 0,
                     unidade: 'UN'
                 };
 
-                // Note: We intentionally DON'T link produto.id because Bling overrides 
-                // the descricao field with the product's registered name when linked.
-                // By using only codigo + descricao (for real SKUs), the order will show the full productRaw.
+                // If we have a valid product ID, reference it
+                // This tells Bling: "use this existing product" instead of "create new"
+                // Note: Check for !== undefined because id could be 0 (falsy but valid)
+                if (product && product.id !== undefined && product.id !== null && product.id !== 0) {
+                    itemPayload.produto = { id: product.id };
+                } else {
+                    // Fallback: only use codigo if we don't have a product ID
+                    // This may still cause issues but is better than nothing
+                    itemPayload.codigo = sku;
+                    console.warn(`[BlingService] Warning: No valid product.id for SKU ${sku}, falling back to codigo`);
+                }
 
                 orderItems.push(itemPayload);
             }
@@ -545,13 +554,30 @@ class BlingService {
     async _findProduct(token, sku) {
         await this._sleep(350);
         try {
-            const response = await axios.get(`${this.baseUrl}/produtos?codigo=${sku}`, {
+            // First try exact match
+            const response = await axios.get(`${this.baseUrl}/produtos?codigo=${encodeURIComponent(sku)}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             if (response.data.data && response.data.data.length > 0) {
                 return response.data.data[0];
             }
+
+            // If not found and SKU has a dash, try searching for just the base code
+            // This handles cases like "7549-750 ML" where product in Bling is just "7549"
+            if (sku.includes('-')) {
+                const baseCode = sku.split('-')[0];
+                await this._sleep(350);
+                const baseResponse = await axios.get(`${this.baseUrl}/produtos?codigo=${encodeURIComponent(baseCode)}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (baseResponse.data.data && baseResponse.data.data.length > 0) {
+                    console.log(`[BlingService] Found product by base code ${baseCode} (original SKU: ${sku})`);
+                    return baseResponse.data.data[0];
+                }
+            }
+
             return null;
         } catch (error) {
             return null;
@@ -592,8 +618,9 @@ class BlingService {
                 if (existing) {
                     return existing;
                 }
-                // If somehow not found (race condition?), return mock with code
-                return { id: 0, codigo: productData.sku };
+                // If somehow not found (race condition?), return null to force fallback
+                console.warn(`[BlingService] Could not fetch existing product ${productData.sku}, will use codigo fallback`);
+                return null;
             }
 
             console.error('[BlingService] Failed to create product:', JSON.stringify(error.response?.data || error.message, null, 2));

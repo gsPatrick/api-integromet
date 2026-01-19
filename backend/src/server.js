@@ -334,27 +334,44 @@ app.get('/bling/clients/search', async (req, res) => {
 
         const token = await blingService.getValidToken();
 
-        // 1. If No Parameters: Fetch Default List (Recent 100)
+        // 1. If No Parameters: Fetch ALL clients (paginated)
         if (!phone && !term) {
             try {
-                console.log('[BlingClientSearch] Fetching default list (100)...');
-                const response = await axios.get(
-                    `https://api.bling.com.br/Api/v3/contatos?limite=100`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-
-                const clients = response.data.data || [];
+                console.log('[BlingClientSearch] Fetching all clients (paginated)...');
                 const foundClients = new Map();
-                for (const c of clients) {
-                    foundClients.set(c.id, {
-                        id: c.id,
-                        nome: c.nome,
-                        cpfCnpj: c.numeroDocumento || '',
-                        telefone: c.telefone || '',
-                        celular: c.celular || '',
-                        email: c.email || ''
-                    });
+                let page = 1;
+                let hasMore = true;
+
+                // Paginate through all clients (max 10 pages = 1000 clients)
+                while (hasMore && page <= 10) {
+                    await new Promise(r => setTimeout(r, 300)); // Rate limit
+
+                    const response = await axios.get(
+                        `https://api.bling.com.br/Api/v3/contatos?pagina=${page}&limite=100`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    const clients = response.data.data || [];
+
+                    if (clients.length === 0) {
+                        hasMore = false;
+                    } else {
+                        for (const c of clients) {
+                            foundClients.set(c.id, {
+                                id: c.id,
+                                nome: c.nome,
+                                cpfCnpj: c.numeroDocumento || '',
+                                telefone: c.telefone || '',
+                                celular: c.celular || '',
+                                email: c.email || ''
+                            });
+                        }
+                        page++;
+                        console.log(`[BlingClientSearch] Page ${page - 1}: ${clients.length} clients. Total: ${foundClients.size}`);
+                    }
                 }
+
+                console.log(`[BlingClientSearch] Total clients fetched: ${foundClients.size}`);
 
                 return res.json({
                     term: '',
