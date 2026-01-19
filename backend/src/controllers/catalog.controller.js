@@ -77,7 +77,7 @@ class CatalogController {
                 return res.status(400).json({ error: 'No PDF file uploaded' });
             }
 
-            const pdfPath = req.file.path;
+            let pdfPath = req.file.path;
             let catalogName = req.body.catalogName || req.file.originalname.replace('.pdf', '');
             const campaignId = req.body.campaignId ? parseInt(req.body.campaignId) : 18; // Default: 18
 
