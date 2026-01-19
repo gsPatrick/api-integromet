@@ -95,7 +95,8 @@ class CatalogController {
                             .replace(/_+/g, '_');
 
                         const newFilename = `catalog-${safeCampaignName}-${Date.now()}.pdf`;
-                        const newPath = path.join(this.uploadDir, newFilename);
+                        // FIX: Use absolute path directly to avoid 'this' context issues in express router
+                        const newPath = path.join(__dirname, '../../public/uploads/catalogs', newFilename);
 
                         console.log(`[CatalogController] Auto-renaming uploaded file to match Campaign: ${campaign.name}`);
                         console.log(`[CatalogController] Old: ${pdfPath} -> New: ${newPath}`);
