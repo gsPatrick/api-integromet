@@ -413,7 +413,7 @@ class WebhookController {
             if (produto.cor) colorParts.push(produto.cor);
 
             if (colorParts.length > 0) {
-                productDescription += `,(Cor: ${colorParts.join(' ')})`;
+                productDescription += ` (Cor: ${colorParts.join(' ')})`;
             }
 
             if (collectionName) {
