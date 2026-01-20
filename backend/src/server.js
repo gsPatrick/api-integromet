@@ -188,7 +188,7 @@ app.get('/debug/local-search', async (req, res) => {
 
         const { PDFDocument } = require('pdf-lib');
         const fsPromises = require('fs').promises;
-        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        // const { GoogleGenerativeAI } = require("@google/generative-ai"); // Already declared above
 
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
