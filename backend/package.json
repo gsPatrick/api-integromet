@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -29,8 +30,7 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
     "sharp": "^0.33.5",
-    "tesseract.js": "^7.0.0",
-    "@google/generative-ai": "^0.2.0"
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "sequelize-cli": "^6.6.5"
