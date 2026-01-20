@@ -148,15 +148,13 @@ class PdfParserAIService {
                                 2. Para cada linha de produto (código), extraia o preço correspondente a CADA coluna de tamanho.
                                 3. Ignore colunas de "Descrição" ou "Coleção".
                                 
-                                EXEMPLO VISUAL:
-                                | Produto | P a G   | 1 a 3   |
-                                | 2001631 | R$ 42,29| R$ 47,79|
-                                
-                                SAÍDA JSON (Lista Flat):
-                                [
-                                  {"code": "2001631", "price": 42.29, "label": "P a G"},
-                                  {"code": "2001631", "price": 47.79, "label": "1 a 3"}
-                                ]
+                                SAÍDA JSON OBRIGATÓRIA:
+                                {
+                                  "items": [
+                                     {"code": "2001631", "price": 42.29, "label": "P a G"},
+                                     {"code": "2001631", "price": 47.79, "label": "1 a 3"}
+                                  ]
+                                }
                                 
                                 REGRAS CRÍTICAS:
                                 - O "label" DEVE ser o cabeçalho da coluna correspondente (Ex: "P a G", "1 a 3").
@@ -165,11 +163,13 @@ class PdfParserAIService {
                             ` }
                         ]
                     }],
+                    response_format: { type: "json_object" },
                     max_tokens: 16000
                 });
 
-                const content = response.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '');
-                mergedResults = JSON.parse(content);
+                const content = response.choices[0].message.content;
+                const parsed = JSON.parse(content);
+                mergedResults = parsed.items || [];
 
             } else {
                 console.log("[PdfParserAI] Chunking PDF for GPT-4o...");
@@ -191,15 +191,18 @@ class PdfParserAIService {
                                         type: "text", text: `
                                         Extraia dados da Tabela Matricial.
                                         Relacione o CÓDIGO (Linha) com o CABEÇALHO DA COLUNA (Tamanho).
-                                        Retorne lista flat: [{"code": "...", "price": 0.00, "label": "Cabeçalho da Coluna"}]
+                                        Retorne JSON OBRIGATÓRIO: { "items": [{"code": "...", "price": 0.00, "label": "Cabeçalho da Coluna"}] }
                                     ` }
                                 ]
                             }],
+                            response_format: { type: "json_object" },
                             max_tokens: 16000
                         });
-                        const content = response.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '');
-                        const items = JSON.parse(content);
-                        mergedResults.push(...items);
+                        const content = response.choices[0].message.content;
+                        const parsed = JSON.parse(content);
+                        if (parsed.items && Array.isArray(parsed.items)) {
+                            mergedResults.push(...parsed.items);
+                        }
 
                     } catch (e) {
                         console.error(`[PdfParserAI] Chunk Error: ${e.message}`);
