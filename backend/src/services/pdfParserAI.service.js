@@ -140,17 +140,16 @@ class PdfParserAIService {
                                 Extraia TODOS os produtos.
                                 
                                 IMPORTANTE: VARIAÇÃO DE TAMANHO
-                                - Se um código tiver preços diferentes por tamanho, retorne múltiplos itens.
-                                - Exemplo: "Ref 123 P/M/G 10,00 GG 12,00" -> 
-                                  [{"code": "123", "price": 10, "label": "P/M/G"}, {"code": "123", "price": 12, "label": "GG"}]
-                                
-                                SAÍDA ESPERADA (JSON Array):
-                                [{"code": "...", "price": 0.00, "label": "..."}]
+                                - A tabela PROVAVELMENTE tem colunas ou linhas indicando tamanhos e preços diferentes.
+                                - Exemplo: "Ref 123 ...... P/M R$ 10,00 ...... G/GG R$ 12,00"
+                                - Retorne separadamente: 
+                                  [{"code": "123", "price": 10, "label": "P/M"}, {"code": "123", "price": 12, "label": "G/GG"}]
                                 
                                 REGRAS:
-                                1. "label" é opcional (use se houver tamanhos específicos).
-                                2. Ignore cabeçalhos repetidos.
-                                3. Retorne APENAS JSON.
+                                1. Label: Se houver tamanhos específicos para aquele preço, coloque no label (Ex: "4 a 8", "P M G").
+                                2. Label Vazio: Se o preço for único para todos os tamanhos, deixe "label": "".
+                                3. NÃO INVENTE LABELS. Use apenas o que está explícito.
+                                4. Retorne APENAS JSON.
                             ` }
                         ]
                     }],
@@ -179,7 +178,8 @@ class PdfParserAIService {
                                     {
                                         type: "text", text: `
                                         Extraia tabela de preços.
-                                        Se houver tamanhos com preços diferentes, separe.
+                                        IMPORTANTE: Identifique e separe PREÇOS POR TAMANHO.
+                                        Se "Ref 123" tiver preços diferentes para tamanhos diferentes, crie itens separados.
                                         JSON Array: [{"code": "...", "price": 0.00, "label": "..."}]
                                     ` }
                                 ]
@@ -209,7 +209,7 @@ class PdfParserAIService {
 
                     const newItem = {
                         price: priceVal,
-                        label: p.label || 'GPT' // Default label if missing
+                        label: p.label || '' // Default to EMPTY if missing (User requested removal of 'GPT')
                     };
 
                     if (map.has(code)) {

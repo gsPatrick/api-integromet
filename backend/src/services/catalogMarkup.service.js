@@ -327,8 +327,8 @@ class CatalogMarkupService {
         // RegEx extended for:
         // 1. Standard numeric: 2000711 (4-8 digits)
         // 2. Alphanumeric: LVT 6011, LBL 6016 (2-3 chars + space? + digits)
-        // Update: \s* allows flexible spacing
-        const codeRegex = /(?:\b[A-Z]{2,3}\s*\d{4,6}\b|\b\d{4,8}\b)/g;
+        // 3. Spaced numeric: 2 0 0 1 6 4 8 (Common in some catalogs)
+        const codeRegex = /(?:\b[A-Z]{2,3}\s*\d{4,6}\b|\b\d{4,8}\b|\b\d(?:\s*\d){3,7}\b)/g;
 
         const codes = await this.extractItemsFromPdf(pdfBuffer, codeRegex);
         console.log(`[CatalogMarkup] Found ${codes.length} codes in visual catalog. Matching...`);
