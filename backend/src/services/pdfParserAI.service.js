@@ -144,7 +144,7 @@ class PdfParserAIService {
                                 A) TABELA MATRICIAL (Colunas = Tamanhos):
                                    - Cabeçalhos: "P a G", "1 a 3", "4 a 8".
                                    - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
-                                   - Gerar múltiplos itens: Ref 123 (P a G), Ref 123 (1 a 3).
+                                   - IMPORTANTE: IGNORE colunas de "Coleção" ou prefixos (ex: MO26). Pegue apenas o CÓDIGO NUMÉRICO.
                                 
                                 B) TABELA SIMPLES (Lista):
                                    - Ref 123 ......... R$ 10,00
@@ -160,7 +160,7 @@ class PdfParserAIService {
                                 
                                 REGRAS DE OURO:
                                 1. SEJA EXAUSTIVO: Se houver 100 linhas, extraia 100 itens.
-                                2. LABEL: Se for Matrix, Label = Cabeçalho da Coluna. Se não, Label = Tamanho específico ou Vazio.
+                                2. CÓDIGO LIMPO: Se estiver escrito "MO26 2001631", extraia apenas "2001631".
                                 3. PREÇO: Numérico (float). Use ponto para decimal.
                             ` }
                         ]
@@ -199,6 +199,7 @@ class PdfParserAIService {
                                         A) TABELA MATRICIAL (Colunas = Tamanhos):
                                            - Cabeçalhos: "P a G", "1 a 3".
                                            - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
+                                           - IMPORTANTE: IGNORE colunas de "Coleção" ou prefixos (ex: MO26). Pegue apenas o CÓDIGO NUMÉRICO.
                                         
                                         B) TABELA SIMPLES (Lista):
                                            - Ref 123 ......... R$ 10,00
@@ -209,7 +210,7 @@ class PdfParserAIService {
                                         
                                         REGRAS DE OURO:
                                         1. SEJA EXAUSTIVO.
-                                        2. LABEL: Se Matrix, use Cabeçalho da Coluna. Se não, Label Específico ou Vazio.
+                                        2. CÓDIGO LIMPO: Se estiver escrito "MO26 2001631", extraia apenas "2001631".
                                         3. PREÇO: Numérico (float).
                                     ` }
                                 ]
@@ -234,7 +235,15 @@ class PdfParserAIService {
             const map = new Map();
             mergedResults.forEach(p => {
                 if (p.code && p.price) {
-                    const code = String(p.code).trim().toUpperCase();
+                    let code = String(p.code).trim().toUpperCase();
+
+                    // FIX: Remove Prefix if present (e.g. MO262001631 -> 2001631)
+                    // Strategy: Match the last 4-8 digits if the string is longer
+                    const numericMatch = code.match(/(\d{4,8})$/);
+                    if (numericMatch) {
+                        code = numericMatch[1];
+                    }
+
                     // Clean price
                     let priceVal = p.price;
                     if (typeof priceVal === 'string') {
@@ -243,7 +252,7 @@ class PdfParserAIService {
 
                     const newItem = {
                         price: priceVal,
-                        label: p.label || '' // Default to EMPTY if missing (User requested removal of 'GPT')
+                        label: p.label || ''
                     };
 
                     if (map.has(code)) {
