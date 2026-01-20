@@ -16,38 +16,11 @@ class PdfParserAIService {
     }
 
     async parsePricePdf(pdfBuffer) {
-        console.log('[PdfParserAI] Extracting text from PDF (Legacy Text Mode)...');
-
+        console.log('[PdfParserAI] Starting Analysis (GPT-4o Only)...');
         let productsMap = new Map();
 
+        // Always use Vision/GPT-4o (User Request: Full Context)
         try {
-            const textPages = await this.extractTextPages(pdfBuffer);
-            let allProducts = [];
-
-            for (let i = 0; i < textPages.length; i++) {
-                // If page text is too short, it's likely an image. Skip text analysis for that page?
-                // Or just try.
-                const pageText = textPages[i];
-                if (pageText.length > 50) {
-                    try {
-                        const products = await this.analyzeTextCheck(pageText);
-                        if (Array.isArray(products)) {
-                            allProducts.push(...products);
-                        }
-                    } catch (error) {
-                        // console.error(`[PdfParserAI] Error parsing page ${i + 1}:`, error.message);
-                    }
-                }
-            }
-            productsMap = this.convertToMap(allProducts);
-        } catch (e) {
-            console.warn('[PdfParserAI] Text extraction failed:', e.message);
-        }
-
-        // FALLBACK: If text extraction failed (few or no products), use Vision (Gemini)
-        if (productsMap.size < 5) {
-            console.log(`[PdfParserAI] Few products found (${productsMap.size}). Switching to Gemini Vision Extraction...`);
-
             // We need a temporary file path for the buffer to pass to Python script
             const tempPdfPath = require('path').join('/tmp', `temp_extract_${Date.now()}.pdf`);
             require('fs').writeFileSync(tempPdfPath, pdfBuffer);
@@ -60,13 +33,16 @@ class PdfParserAIService {
                     productsMap.set(key, value);
                 });
 
-                console.log(`[PdfParserAI] Gemini Vision found ${visionProducts.size} products.`);
+                console.log(`[PdfParserAI] GPT-4o Extraction found ${visionProducts.size} products.`);
 
             } catch (visionErr) {
                 console.error('[PdfParserAI] Vision extraction failed:', visionErr);
             } finally {
                 if (require('fs').existsSync(tempPdfPath)) require('fs').unlinkSync(tempPdfPath);
             }
+
+        } catch (e) {
+            console.error('[PdfParserAI] Critical Error:', e.message);
         }
 
         return productsMap;
