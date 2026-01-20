@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx sequelize-cli db:migrate && node src/server.js",
+    "start": "npx sequelize-cli db:migrate && (python-ocr-service/venv/bin/python python-ocr-service/extract_api.py &) && node src/server.js",
     "fix-names": "node fix_names_api.js"
   },
   "keywords": [],

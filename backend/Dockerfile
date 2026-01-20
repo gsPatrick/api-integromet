@@ -6,6 +6,9 @@ FROM node:20
 RUN apt-get update && apt-get install -y \
     graphicsmagick \
     ghostscript \
+    python3 \
+    python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,6 +21,10 @@ RUN npm install
 
 # Copy application source code
 COPY . .
+
+# Setup Python Environment (After copy)
+RUN python3 -m venv python-ocr-service/venv && \
+    ./python-ocr-service/venv/bin/pip install --no-cache-dir -r python-ocr-service/requirements.txt
 
 # Expose the API port
 EXPOSE 3000
