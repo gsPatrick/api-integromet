@@ -164,6 +164,45 @@ app.get('/debug/assistant-source', async (req, res) => {
     }
 });
 
+// DEBUG ENDPOINT: Test Local Python Search Performance
+app.get('/debug/local-search', async (req, res) => {
+    try {
+        const axios = require('axios');
+        const path = require('path');
+        const fs = require('fs');
+
+        const catalogName = req.query.catalog || 'catalog-emp_rio_da_fantasia_jan_26-1768858405148.pdf'; // Default to known file
+        // Try to find the file in uploads/catalogs
+        const pdfPath = path.join(__dirname, '../public/uploads/catalogs', catalogName);
+
+        if (!fs.existsSync(pdfPath)) {
+            return res.status(404).json({ error: 'PDF not found', path: pdfPath });
+        }
+
+        console.log(`[Debug] Testing Local Python Search for: ${catalogName}`);
+        const startTime = Date.now();
+
+        // Call Python Service
+        const pyResponse = await axios.post('http://localhost:5002/extract-catalog', {
+            pdfPath: pdfPath
+        });
+
+        const endTime = Date.now();
+        const duration = (endTime - startTime) / 1000;
+
+        res.json({
+            status: 'success',
+            catalog: catalogName,
+            time_seconds: duration,
+            products_found: pyResponse.data.total,
+            sample_product: pyResponse.data.products ? pyResponse.data.products.slice(0, 3) : []
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // DEBUG ENDPOINT: List all files in Vector Store
 app.get('/debug/assistant-files', async (req, res) => {
     try {
