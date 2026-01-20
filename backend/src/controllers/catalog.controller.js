@@ -148,7 +148,28 @@ class CatalogController {
                     try {
                         console.log(`[CatalogController] Starting OpenAI Extraction for ${catalogName} (File ${fileId})...`);
 
-                        const extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
+                        console.log(`[CatalogController] Starting Extraction for ${catalogName}...`);
+
+                        // 3.1. NEW: Call Local Python Service (Gemini Flash) - Replaces OpenAI extraction
+                        // This is "Our Database" solution requested by user
+                        let extractedProducts = [];
+                        try {
+                            const axios = require('axios');
+                            console.log(`[CatalogController] Calling Python Service for extraction: ${pdfPath}`);
+                            const pyResponse = await axios.post('http://localhost:5002/extract-catalog', {
+                                pdfPath: pdfPath
+                            });
+
+                            if (pyResponse.data && pyResponse.data.products) {
+                                extractedProducts = pyResponse.data.products;
+                                console.log(`[CatalogController] PYTHON SUCCESS: Extracted ${extractedProducts.length} products locally.`);
+                            }
+                        } catch (pyError) {
+                            console.error('[CatalogController] Python Service Failed:', pyError.message);
+                            console.warn('[CatalogController] Falling back to OpenAI extraction...');
+                            // Fallback to old method if local fails
+                            extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
+                        }
                         console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI (Fast Mode).`);
 
                         let savedCount = 0;
