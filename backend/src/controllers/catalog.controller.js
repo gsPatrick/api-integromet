@@ -150,80 +150,95 @@ class CatalogController {
 
                         console.log(`[CatalogController] Starting Extraction for ${catalogName}...`);
 
-                        // 3.1. NEW: Native Node.js Gemini Vision Extraction
-                        // No extra python server needed.
-                        let extractedProducts = [];
-                        try {
-                            const { GoogleGenerativeAI } = require("@google/generative-ai");
-                            const { GoogleAIFileManager } = require("@google/generative-ai/server");
+                        // 3.1. NEW: Native Node.js Gemini Vision Extraction with Chunking
+                        // Using "Solução 1" (Chunking) for scalability.
 
-                            // Use Env var
-                            const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-                            if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found");
+                        // Helper: Split PDF
+                        async function splitPDFByPages(fullPath, pagesPerChunk = 15) {
+                            const existingPdfBytes = await fsPromises.readFile(fullPath);
+                            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+                            const totalPages = pdfDoc.getPageCount();
 
-                            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                            const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
+                            console.log(`[CatalogController] Splitting PDF (${totalPages} pages) into chunks of ${pagesPerChunk}...`);
 
-                            console.log(`[CatalogController] Uploading to Gemini directly: ${pdfPath}`);
+                            const chunks = [];
+                            for (let i = 0; i < totalPages; i += pagesPerChunk) {
+                                const newPdf = await PDFDocument.create();
+                                const end = Math.min(i + pagesPerChunk, totalPages);
 
-                            const uploadResponse = await fileManager.uploadFile(pdfPath, {
-                                mimeType: "application/pdf",
-                                displayName: catalogName,
-                            });
+                                const pageIndices = Array.from({ length: end - i }, (_, idx) => i + idx);
+                                const pages = await newPdf.copyPages(pdfDoc, pageIndices);
+                                pages.forEach(page => newPdf.addPage(page));
 
-                            console.log(`[CatalogController] Gemini File Uploaded: ${uploadResponse.file.uri}`);
-
-                            // Wait for processing (usually fast for small files, but PDFs need moment)
-                            let file = await fileManager.getFile(uploadResponse.file.name);
-                            while (file.state === "PROCESSING") {
-                                console.log("[CatalogController] Gemini Processing PDF...");
-                                await new Promise((resolve) => setTimeout(resolve, 2000));
-                                file = await fileManager.getFile(uploadResponse.file.name);
+                                const pdfBytes = await newPdf.save();
+                                chunks.push({
+                                    buffer: Buffer.from(pdfBytes),
+                                    startPage: i + 1,
+                                    endPage: end
+                                });
                             }
-
-                            if (file.state === "FAILED") {
-                                throw new Error("Gemini File Processing Failed");
-                            }
-
-                            // Generate Content
-                            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-                            const result = await model.generateContent([
-                                {
-                                    fileData: {
-                                        mimeType: uploadResponse.file.mimeType,
-                                        fileUri: uploadResponse.file.uri
-                                    }
-                                },
-                                {
-                                    text: `
-                                    VOCÊ É UM EXTRATOR DE DADOS DE CATÁLOGO.
-                                    Analise este PDF visualmente e extraia TODOS os produtos.
-                                    
-                                    SAÍDA DOC (JSON Array):
-                                    [
-                                        { "code": "REF 123", "name": "Produto X", "price": 99.90 },
-                                        ...
-                                    ]
-                                    
-                                    REGRAS:
-                                    1. Extraia de TODAS as páginas (o PDF tem várias).
-                                    2. Se não tiver código, use o NOME.
-                                    3. Busque preços (ex: R$ 99,90).
-                                ` }
-                            ]);
-
-                            const responseText = result.response.text();
-                            // Clean JSON
-                            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-                            if (jsonMatch) {
-                                extractedProducts = JSON.parse(jsonMatch[0]);
-                                console.log(`[CatalogController] GEMINI NODE SUCCESS: Extracted ${extractedProducts.length} products visually.`);
-                            }
-                        } catch (nodeGeminiError) {
-                            console.error('[CatalogController] Native Gemini Failed:', nodeGeminiError.message);
-                            // Fallback to old method
-                            extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
+                            return chunks;
                         }
+
+                        // Use Env var
+                        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+                        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found");
+
+                        const { GoogleGenerativeAI } = require("@google/generative-ai");
+                        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+                        console.log(`[CatalogController] Starting Chunked Extraction for: ${catalogName}`);
+
+                        let extractedProducts = [];
+                        const chunks = await splitPDFByPages(pdfPath, 15);
+
+                        for (const chunk of chunks) {
+                            console.log(`[CatalogController] Processing Chunk ${chunk.startPage}-${chunk.endPage}...`);
+                            try {
+                                const result = await model.generateContent([
+                                    {
+                                        inlineData: {
+                                            data: chunk.buffer.toString("base64"),
+                                            mimeType: "application/pdf"
+                                        }
+                                    },
+                                    {
+                                        text: `
+                                        VOCÊ É UM EXTRATOR DE DADOS DE CATÁLOGO.
+                                        Analise este PDF visualmente e extraia TODOS os produtos.
+
+                                        SAÍDA DOC (JSON Array):
+                                        [
+                                            { "code": "REF 123", "name": "Produto X", "price": 99.90 },
+                                            ...
+                                        ]
+
+                                        REGRAS:
+                                        1. Extraia de TODAS as páginas.
+                                        2. Se não tiver código, use o NOME.
+                                        3. Busque preços (ex: R$ 99,90).
+                                    ` }
+                                ]);
+
+                                const responseText = result.response.text();
+                                const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                                if (jsonMatch) {
+                                    const chunkProducts = JSON.parse(jsonMatch[0]);
+                                    extractedProducts.push(...chunkProducts);
+                                    console.log(`[CatalogController] Chunk ${chunk.startPage}-${chunk.endPage}: Found ${chunkProducts.length} products.`);
+                                }
+
+                                // Rate Limit Safety (1s)
+                                await new Promise(r => setTimeout(r, 1000));
+                            } catch (chunkError) {
+                                console.error(`[CatalogController] Error processing chunk ${chunk.startPage}-${chunk.endPage}:`, chunkError.message);
+                            }
+                        }
+
+                        console.log(`[CatalogController] GEMINI CHUNKING SUCCESS: Total ${extractedProducts.length} products visually.`);
+                        // Fallback to old method
+                        // extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
                         console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI (Fast Mode).`);
 
                         let savedCount = 0;

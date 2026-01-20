@@ -182,42 +182,72 @@ app.get('/debug/local-search', async (req, res) => {
         console.log(`[Debug] Testing Native Gemini Search for: ${catalogName}`);
         const startTime = Date.now();
 
-        // GEMINI NATIVE LOGIC
+        // GEMINI NATIVE LOGIC WITH CHUNKING
         const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
         if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found in Environment");
 
+        const { PDFDocument } = require('pdf-lib');
+        const fsPromises = require('fs').promises;
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
-        const uploadResponse = await fileManager.uploadFile(pdfPath, {
-            mimeType: "application/pdf",
-            displayName: "Debug_" + Date.now(),
-        });
+        // Helper: Split PDF (Duplicate for debug independence)
+        async function splitPDFByPagesDebug(fullPath, pagesPerChunk = 15) {
+            const existingPdfBytes = await fsPromises.readFile(fullPath);
+            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+            const totalPages = pdfDoc.getPageCount();
 
-        let file = await fileManager.getFile(uploadResponse.file.name);
-        while (file.state === "PROCESSING") {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            file = await fileManager.getFile(uploadResponse.file.name);
+            const chunks = [];
+            for (let i = 0; i < totalPages; i += pagesPerChunk) {
+                const newPdf = await PDFDocument.create();
+                const end = Math.min(i + pagesPerChunk, totalPages);
+
+                const pageIndices = Array.from({ length: end - i }, (_, idx) => i + idx);
+                const pages = await newPdf.copyPages(pdfDoc, pageIndices);
+                pages.forEach(page => newPdf.addPage(page));
+
+                const pdfBytes = await newPdf.save();
+                chunks.push({
+                    buffer: Buffer.from(pdfBytes),
+                    startPage: i + 1,
+                    endPage: end
+                });
+            }
+            return chunks;
         }
 
-        if (file.state === "FAILED") throw new Error("Processing Failed");
+        const chunks = await splitPDFByPagesDebug(pdfPath, 15);
+        let products = [];
 
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-        const result = await model.generateContent([
-            { fileData: { mimeType: uploadResponse.file.mimeType, fileUri: uploadResponse.file.uri } },
-            { text: "Extraia TODOS os produtos em JSON: [{code, name, price}]" }
-        ]);
+        for (const chunk of chunks) {
+            console.log(`[Debug] Processing Chunk ${chunk.startPage}-${chunk.endPage}...`);
+            const result = await model.generateContent([
+                {
+                    inlineData: {
+                        data: chunk.buffer.toString("base64"),
+                        mimeType: "application/pdf"
+                    }
+                },
+                { text: "Extraia TODOS os produtos em JSON: [{code, name, price}]" }
+            ]);
 
-        const text = result.response.text();
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        const products = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+            const text = result.response.text();
+            const jsonMatch = text.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                products.push(...JSON.parse(jsonMatch[0]));
+            }
+            await new Promise(r => setTimeout(r, 1000));
+        }
 
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
 
         res.json({
             status: 'success',
-            engine: 'Gemini Native Node',
+            engine: 'Gemini Node Chunked',
+            chunks_processed: chunks.length,
             time_seconds: duration,
             products_found: products.length,
             sample: products.slice(0, 3)
