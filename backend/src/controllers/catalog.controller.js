@@ -157,8 +157,9 @@ class CatalogController {
                             const { GoogleGenerativeAI } = require("@google/generative-ai");
                             const { GoogleAIFileManager } = require("@google/generative-ai/server");
 
-                            // Use Env var or fallback (User provided key)
-                            const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAS_ZW-fPaVg88uYEgACMys0Ne0fmU6Tvk";
+                            // Use Env var
+                            const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+                            if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found");
 
                             const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
                             const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);

@@ -183,7 +183,9 @@ app.get('/debug/local-search', async (req, res) => {
         const startTime = Date.now();
 
         // GEMINI NATIVE LOGIC
-        const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAS_ZW-fPaVg88uYEgACMys0Ne0fmU6Tvk";
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found in Environment");
+
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
 
