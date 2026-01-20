@@ -136,20 +136,32 @@ class PdfParserAIService {
                             { type: "file", file: { filename: "pricelist.pdf", file_data: fileData } },
                             {
                                 type: "text", text: `
-                                VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO DE MODA.
-                                Extraia TODOS os produtos.
+                                VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO COMPLEXAS.
                                 
-                                IMPORTANTE: VARIAÇÃO DE TAMANHO
-                                - A tabela PROVAVELMENTE tem colunas ou linhas indicando tamanhos e preços diferentes.
-                                - Exemplo: "Ref 123 ...... P/M R$ 10,00 ...... G/GG R$ 12,00"
-                                - Retorne separadamente: 
-                                  [{"code": "123", "price": 10, "label": "P/M"}, {"code": "123", "price": 12, "label": "G/GG"}]
+                                ESTRUTURA DA TABELA:
+                                - Olhe para a imagem fornecida (Tabela de Preços).
+                                - As colunas representam TAMANHOS (ex: "P a G", "1 a 3", "4 a 8", "Único").
+                                - As linhas representam PRODUTOS (Código).
                                 
-                                REGRAS:
-                                1. Label: Se houver tamanhos específicos para aquele preço, coloque no label (Ex: "4 a 8", "P M G").
-                                2. Label Vazio: Se o preço for único para todos os tamanhos, deixe "label": "".
-                                3. NÃO INVENTE LABELS. Use apenas o que está explícito.
-                                4. Retorne APENAS JSON.
+                                SUA TAREFA:
+                                1. Identifique os cabeçalhos de tamanho no topo da tabela.
+                                2. Para cada linha de produto (código), extraia o preço correspondente a CADA coluna de tamanho.
+                                3. Ignore colunas de "Descrição" ou "Coleção".
+                                
+                                EXEMPLO VISUAL:
+                                | Produto | P a G   | 1 a 3   |
+                                | 2001631 | R$ 42,29| R$ 47,79|
+                                
+                                SAÍDA JSON (Lista Flat):
+                                [
+                                  {"code": "2001631", "price": 42.29, "label": "P a G"},
+                                  {"code": "2001631", "price": 47.79, "label": "1 a 3"}
+                                ]
+                                
+                                REGRAS CRÍTICAS:
+                                - O "label" DEVE ser o cabeçalho da coluna correspondente (Ex: "P a G", "1 a 3").
+                                - Se o cabeçalho for genérico ou não existir, deixe label vazio.
+                                - Extraia TODOS os preços de TODAS as colunas.
                             ` }
                         ]
                     }],
@@ -177,10 +189,9 @@ class PdfParserAIService {
                                     { type: "file", file: { filename: "chunk.pdf", file_data: fileData } },
                                     {
                                         type: "text", text: `
-                                        Extraia tabela de preços.
-                                        IMPORTANTE: Identifique e separe PREÇOS POR TAMANHO.
-                                        Se "Ref 123" tiver preços diferentes para tamanhos diferentes, crie itens separados.
-                                        JSON Array: [{"code": "...", "price": 0.00, "label": "..."}]
+                                        Extraia dados da Tabela Matricial.
+                                        Relacione o CÓDIGO (Linha) com o CABEÇALHO DA COLUNA (Tamanho).
+                                        Retorne lista flat: [{"code": "...", "price": 0.00, "label": "Cabeçalho da Coluna"}]
                                     ` }
                                 ]
                             }],
