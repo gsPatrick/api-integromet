@@ -76,43 +76,102 @@ class PdfParserAIService {
      * Calls gemini_extract.py to get JSON data from PDF images
      */
     async extractProductsFromPdfVision(pdfPath) {
-        const scriptPath = require('path').join(__dirname, '../../python-ocr-service/gemini_extract.py');
-        const command = `python3 "${scriptPath}" "${pdfPath}"`;
+        console.log('[PdfParserAI] Running Native Gemini Vision Extraction (Chunked)...');
 
-        console.log('[PdfParserAI] Running Gemini Extraction Script...');
+        const { PDFDocument } = require('pdf-lib');
+        const fsPromises = require('fs').promises;
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-        try {
-            // Increase maxBuffer for large JSON output
-            const { stdout, stderr } = await execPromise(command, { maxBuffer: 1024 * 1024 * 10 });
+        // Helper: Split PDF
+        async function splitPDFByPages(fullPath, pagesPerChunk = 15) {
+            const existingPdfBytes = await fsPromises.readFile(fullPath);
+            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+            const totalPages = pdfDoc.getPageCount();
 
-            if (stderr) console.warn('[PdfParserAI] Python Stderr:', stderr);
+            const chunks = [];
+            for (let i = 0; i < totalPages; i += pagesPerChunk) {
+                const newPdf = await PDFDocument.create();
+                const end = Math.min(i + pagesPerChunk, totalPages);
 
-            const result = JSON.parse(stdout);
+                const pageIndices = Array.from({ length: end - i }, (_, idx) => i + idx);
+                const pages = await newPdf.copyPages(pdfDoc, pageIndices);
+                pages.forEach(page => newPdf.addPage(page));
 
-            if (result.error) {
-                throw new Error(result.error);
-            }
-
-            // Convert List to Map format expected by Controller
-            // List format: [{code: "123", price: 10.0}]
-            // Map format: "123" -> [{price: 10.0, label: ""}]
-            const map = new Map();
-            if (Array.isArray(result)) {
-                result.forEach(p => {
-                    if (p.code && p.price) {
-                        const code = String(p.code).trim().toUpperCase();
-                        map.set(code, [{
-                            price: parseFloat(p.price),
-                            label: 'Gemini'
-                        }]);
-                    }
+                const pdfBytes = await newPdf.save();
+                chunks.push({
+                    buffer: Buffer.from(pdfBytes),
+                    startPage: i + 1,
+                    endPage: end
                 });
             }
+            return chunks;
+        }
+
+        try {
+            const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+            if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found");
+
+            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+            const chunks = await splitPDFByPages(pdfPath, 15);
+            let mergedResults = [];
+
+            for (const chunk of chunks) {
+                try {
+                    const result = await model.generateContent([
+                        {
+                            inlineData: {
+                                data: chunk.buffer.toString("base64"),
+                                mimeType: "application/pdf"
+                            }
+                        },
+                        {
+                            text: `
+                            Extract ALL products from this price list.
+                            Return ONLY valid JSON array:
+                            [{"code": "...", "price": 10.50}]
+                            
+                            Rules:
+                            1. Extract 'code' (reference) and 'price'.
+                            2. Ignore currency symbols (R$). 
+                        ` }
+                    ]);
+
+                    const responseText = result.response.text();
+                    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) {
+                        const chunkProducts = JSON.parse(jsonMatch[0]);
+                        mergedResults.push(...chunkProducts);
+                    }
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (e) {
+                    console.error(`[PdfParserAI] Chunk Error: ${e.message}`);
+                }
+            }
+
+            // Convert to Map
+            const map = new Map();
+            mergedResults.forEach(p => {
+                if (p.code && p.price) {
+                    const code = String(p.code).trim().toUpperCase();
+                    // Clean price
+                    let priceVal = p.price;
+                    if (typeof priceVal === 'string') {
+                        priceVal = parseFloat(priceVal.replace(',', '.').replace(/[^\d.]/g, ''));
+                    }
+                    map.set(code, [{
+                        price: priceVal,
+                        label: 'Gemini'
+                    }]);
+                }
+            });
+
             return map;
 
         } catch (error) {
-            console.error('[PdfParserAI] Gemini Extract Error:', error);
-            throw error;
+            console.error('[PdfParserAI] Native Gemini Failed:', error);
+            throw error; // Re-throw to handle upstream
         }
     }
 
