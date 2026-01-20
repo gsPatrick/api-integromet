@@ -164,13 +164,14 @@ app.get('/debug/assistant-source', async (req, res) => {
     }
 });
 
-// DEBUG ENDPOINT: Test Native Gemini Node Search
+// DEBUG ENDPOINT: Test Native OpenAI GPT-4o Search
 app.get('/debug/local-search', async (req, res) => {
     try {
         const path = require('path');
         const fs = require('fs');
-        const { GoogleGenerativeAI } = require("@google/generative-ai");
-        const { GoogleAIFileManager } = require("@google/generative-ai/server");
+        const { PDFDocument } = require('pdf-lib');
+        const fsPromises = require('fs').promises;
+        const OpenAI = require('openai');
 
         const catalogName = req.query.catalog || 'catalog-emp_rio_da_fantasia_jan_26-1768858405148.pdf';
         const pdfPath = path.join(__dirname, '../public/uploads/catalogs', catalogName);
@@ -179,65 +180,63 @@ app.get('/debug/local-search', async (req, res) => {
             return res.status(404).json({ error: 'PDF not found', path: pdfPath });
         }
 
-        console.log(`[Debug] Testing Native Gemini Search for: ${catalogName}`);
+        console.log(`[Debug] Testing OpenAI GPT-4o Search for: ${catalogName}`);
         const startTime = Date.now();
 
-        // GEMINI NATIVE LOGIC WITH CHUNKING
-        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found in Environment");
+        // OPENAI LOGIC
+        const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+        if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY Not Found in Environment");
 
-        const { PDFDocument } = require('pdf-lib');
-        const fsPromises = require('fs').promises;
+        const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        const fileBuffer = await fsPromises.readFile(pdfPath);
+        const pdfDoc = await PDFDocument.load(fileBuffer);
+        const totalPages = pdfDoc.getPageCount();
+        const fileSizeMB = fileBuffer.length / (1024 * 1024);
 
-        // Helper: Split PDF (Duplicate for debug independence)
-        async function splitPDFByPagesDebug(fullPath, pagesPerChunk = 15) {
-            const existingPdfBytes = await fsPromises.readFile(fullPath);
-            const pdfDoc = await PDFDocument.load(existingPdfBytes);
-            const totalPages = pdfDoc.getPageCount();
+        let products = [];
+        let info = { engine: 'GPT-4o Smart', totalPages, fileSizeMB, chunks: 0 };
 
-            const chunks = [];
+        // Helper
+        async function processChunk(buffer) {
+            const base64PDF = buffer.toString('base64');
+            const fileData = `data:application/pdf;base64,${base64PDF}`;
+            const response = await openai.chat.completions.create({
+                model: "gpt-4o",
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "file", file: { filename: "chunk.pdf", file_data: fileData } },
+                        { type: "text", text: "Extraia TODOS os produtos em JSON: [{code, name, price}]" }
+                    ]
+                }],
+                max_tokens: 16000
+            });
+            return JSON.parse(response.choices[0].message.content.replace(/```json/g, '').replace(/```/g, ''));
+        }
+
+        if (totalPages <= 100 && fileSizeMB <= 32) {
+            console.log("[Debug] Fast Path (<100 pages)");
+            products = await processChunk(fileBuffer);
+        } else {
+            console.log("[Debug] Chunking...");
+            const pagesPerChunk = 50;
             for (let i = 0; i < totalPages; i += pagesPerChunk) {
+                info.chunks++;
                 const newPdf = await PDFDocument.create();
                 const end = Math.min(i + pagesPerChunk, totalPages);
-
                 const pageIndices = Array.from({ length: end - i }, (_, idx) => i + idx);
                 const pages = await newPdf.copyPages(pdfDoc, pageIndices);
                 pages.forEach(page => newPdf.addPage(page));
+                const chunkBytes = await newPdf.save();
 
-                const pdfBytes = await newPdf.save();
-                chunks.push({
-                    buffer: Buffer.from(pdfBytes),
-                    startPage: i + 1,
-                    endPage: end
-                });
+                try {
+                    const chunkProducts = await processChunk(Buffer.from(chunkBytes));
+                    products.push(...chunkProducts);
+                } catch (e) {
+                    console.error("Chunk Error:", e.message);
+                }
             }
-            return chunks;
-        }
-
-        const chunks = await splitPDFByPagesDebug(pdfPath, 15);
-        let products = [];
-
-        for (const chunk of chunks) {
-            console.log(`[Debug] Processing Chunk ${chunk.startPage}-${chunk.endPage}...`);
-            const result = await model.generateContent([
-                {
-                    inlineData: {
-                        data: chunk.buffer.toString("base64"),
-                        mimeType: "application/pdf"
-                    }
-                },
-                { text: "Extraia TODOS os produtos em JSON: [{code, name, price}]" }
-            ]);
-
-            const text = result.response.text();
-            const jsonMatch = text.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                products.push(...JSON.parse(jsonMatch[0]));
-            }
-            await new Promise(r => setTimeout(r, 1000));
         }
 
         const endTime = Date.now();
@@ -245,8 +244,7 @@ app.get('/debug/local-search', async (req, res) => {
 
         res.json({
             status: 'success',
-            engine: 'Gemini Node Chunked',
-            chunks_processed: chunks.length,
+            ...info,
             time_seconds: duration,
             products_found: products.length,
             sample: products.slice(0, 3)

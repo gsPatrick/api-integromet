@@ -150,93 +150,104 @@ class CatalogController {
 
                         console.log(`[CatalogController] Starting Extraction for ${catalogName}...`);
 
-                        // 3.1. NEW: Native Node.js Gemini Vision Extraction with Chunking
-                        // Using "Solução 1" (Chunking) for scalability.
+                        // 3.1. NEW: OpenAI GPT-4o Extraction
+                        // Strategy: Direct upload for <100 pages, Chunking for larger.
 
-                        // Helper: Split PDF
-                        async function splitPDFByPages(fullPath, pagesPerChunk = 15) {
-                            const existingPdfBytes = await fsPromises.readFile(fullPath);
-                            const pdfDoc = await PDFDocument.load(existingPdfBytes);
-                            const totalPages = pdfDoc.getPageCount();
+                        const { PDFDocument } = require('pdf-lib');
+                        const fsPromises = require('fs').promises;
+                        const OpenAI = require('openai');
 
-                            console.log(`[CatalogController] Splitting PDF (${totalPages} pages) into chunks of ${pagesPerChunk}...`);
+                        // Use OpenAI Key
+                        const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+                        if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY Not Found");
 
-                            const chunks = [];
+                        const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+                        console.log(`[CatalogController] Reading PDF for GPT-4o: ${pdfPath}`);
+                        const fileBuffer = await fsPromises.readFile(pdfPath);
+                        const pdfDoc = await PDFDocument.load(fileBuffer);
+                        const totalPages = pdfDoc.getPageCount();
+                        const fileSizeMB = fileBuffer.length / (1024 * 1024);
+
+                        console.log(`[CatalogController] PDF Stats: ${totalPages} pages, ${fileSizeMB.toFixed(2)} MB`);
+
+                        let extractedProducts = [];
+
+                        // Helper: Send chunk to OpenAI
+                        async function processOpenAIChunk(buffer, pagesLabel) {
+                            const base64PDF = buffer.toString('base64');
+                            const fileData = `data:application/pdf;base64,${base64PDF}`;
+
+                            console.log(`[CatalogController] Sending ${pagesLabel} to GPT-4o...`);
+
+                            const response = await openai.chat.completions.create({
+                                model: "gpt-4o",
+                                messages: [{
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "file",
+                                            file: {
+                                                filename: "catalog_chunk.pdf",
+                                                file_data: fileData
+                                            }
+                                        },
+                                        {
+                                            type: "text",
+                                            text: `
+                                                VOCÊ É UM EXTRATOR DE DADOS DE CATÁLOGO.
+                                                Extraia TODOS os produtos destas páginas (${pagesLabel}).
+                                                
+                                                SAÍDA DOC (JSON Array APENAS):
+                                                [
+                                                    { "code": "REF 123", "name": "Produto X", "price": 99.90 },
+                                                    ...
+                                                ]
+                                                
+                                                REGRAS:
+                                                1. Extraia de TODAS as páginas.
+                                                2. Se não tiver código, use o NOME.
+                                                3. Busque preços (ex: R$ 99,90).
+                                                4. NÃO coloque markdown (\`\`\`json). Retorne APENAS o JSON puro.
+                                            `
+                                        }
+                                    ]
+                                }],
+                                max_tokens: 16000 // Large output support
+                            });
+
+                            let content = response.choices[0].message.content;
+                            // Strip markdown if present
+                            content = content.replace(/```json/g, '').replace(/```/g, '');
+                            return JSON.parse(content);
+                        }
+
+                        if (totalPages <= 100 && fileSizeMB <= 32) {
+                            // FAST PATH: Single Request
+                            console.log("[CatalogController] Fast Path: Sending entire PDF.");
+                            extractedProducts = await processOpenAIChunk(fileBuffer, `Pages 1-${totalPages}`);
+                        } else {
+                            // CHUNKED PATH
+                            console.log("[CatalogController] Large PDF Detected. Chunking...");
+                            const pagesPerChunk = 50; // Safety margin
                             for (let i = 0; i < totalPages; i += pagesPerChunk) {
                                 const newPdf = await PDFDocument.create();
                                 const end = Math.min(i + pagesPerChunk, totalPages);
-
                                 const pageIndices = Array.from({ length: end - i }, (_, idx) => i + idx);
                                 const pages = await newPdf.copyPages(pdfDoc, pageIndices);
                                 pages.forEach(page => newPdf.addPage(page));
+                                const chunkBytes = await newPdf.save();
 
-                                const pdfBytes = await newPdf.save();
-                                chunks.push({
-                                    buffer: Buffer.from(pdfBytes),
-                                    startPage: i + 1,
-                                    endPage: end
-                                });
-                            }
-                            return chunks;
-                        }
-
-                        // Use Env var
-                        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-                        if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY Not Found");
-
-                        const { GoogleGenerativeAI } = require("@google/generative-ai");
-                        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-                        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-                        console.log(`[CatalogController] Starting Chunked Extraction for: ${catalogName}`);
-
-                        let extractedProducts = [];
-                        const chunks = await splitPDFByPages(pdfPath, 15);
-
-                        for (const chunk of chunks) {
-                            console.log(`[CatalogController] Processing Chunk ${chunk.startPage}-${chunk.endPage}...`);
-                            try {
-                                const result = await model.generateContent([
-                                    {
-                                        inlineData: {
-                                            data: chunk.buffer.toString("base64"),
-                                            mimeType: "application/pdf"
-                                        }
-                                    },
-                                    {
-                                        text: `
-                                        VOCÊ É UM EXTRATOR DE DADOS DE CATÁLOGO.
-                                        Analise este PDF visualmente e extraia TODOS os produtos.
-
-                                        SAÍDA DOC (JSON Array):
-                                        [
-                                            { "code": "REF 123", "name": "Produto X", "price": 99.90 },
-                                            ...
-                                        ]
-
-                                        REGRAS:
-                                        1. Extraia de TODAS as páginas.
-                                        2. Se não tiver código, use o NOME.
-                                        3. Busque preços (ex: R$ 99,90).
-                                    ` }
-                                ]);
-
-                                const responseText = result.response.text();
-                                const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-                                if (jsonMatch) {
-                                    const chunkProducts = JSON.parse(jsonMatch[0]);
+                                try {
+                                    const chunkProducts = await processOpenAIChunk(Buffer.from(chunkBytes), `Pages ${i + 1}-${end}`);
                                     extractedProducts.push(...chunkProducts);
-                                    console.log(`[CatalogController] Chunk ${chunk.startPage}-${chunk.endPage}: Found ${chunkProducts.length} products.`);
+                                } catch (err) {
+                                    console.error(`[CatalogController] Error on chunk ${i + 1}-${end}:`, err.message);
                                 }
-
-                                // Rate Limit Safety (1s)
-                                await new Promise(r => setTimeout(r, 1000));
-                            } catch (chunkError) {
-                                console.error(`[CatalogController] Error processing chunk ${chunk.startPage}-${chunk.endPage}:`, chunkError.message);
                             }
                         }
 
-                        console.log(`[CatalogController] GEMINI CHUNKING SUCCESS: Total ${extractedProducts.length} products visually.`);
+                        console.log(`[CatalogController] GPT-4o SUCCESS: Extracted ${extractedProducts.length} products.`);
                         // Fallback to old method
                         // extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
                         console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI (Fast Mode).`);
