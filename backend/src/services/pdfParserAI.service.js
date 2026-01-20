@@ -136,30 +136,32 @@ class PdfParserAIService {
                             { type: "file", file: { filename: "pricelist.pdf", file_data: fileData } },
                             {
                                 type: "text", text: `
-                                VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO COMPLEXAS.
+                                VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO.
                                 
-                                ESTRUTURA DA TABELA:
-                                - Olhe para a imagem fornecida (Tabela de Preços).
-                                - As colunas representam TAMANHOS (ex: "P a G", "1 a 3", "4 a 8", "Único").
-                                - As linhas representam PRODUTOS (Código).
+                                SUA MISSÃO: Extrair TODOS os produtos e preços da imagem. NÃO PULE NENHUM.
                                 
-                                SUA TAREFA:
-                                1. Identifique os cabeçalhos de tamanho no topo da tabela.
-                                2. Para cada linha de produto (código), extraia o preço correspondente a CADA coluna de tamanho.
-                                3. Ignore colunas de "Descrição" ou "Coleção".
+                                ESTRUTURA DINÂMICA (Pode variar):
+                                A) TABELA MATRICIAL (Colunas = Tamanhos):
+                                   - Cabeçalhos: "P a G", "1 a 3", "4 a 8".
+                                   - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
+                                   - Gerar múltiplos itens: Ref 123 (P a G), Ref 123 (1 a 3).
+                                
+                                B) TABELA SIMPLES (Lista):
+                                   - Ref 123 ......... R$ 10,00
+                                   - Se houver tamanho na descrição (ex: "Ref 123 P/M"), coloque "P/M" no label.
                                 
                                 SAÍDA JSON OBRIGATÓRIA:
                                 {
                                   "items": [
-                                     {"code": "2001631", "price": 42.29, "label": "P a G"},
-                                     {"code": "2001631", "price": 47.79, "label": "1 a 3"}
+                                     {"code": "...", "price": 0.00, "label": "..."},
+                                     {"code": "...", "price": 0.00, "label": "..."}
                                   ]
                                 }
                                 
-                                REGRAS CRÍTICAS:
-                                - O "label" DEVE ser o cabeçalho da coluna correspondente (Ex: "P a G", "1 a 3").
-                                - Se o cabeçalho for genérico ou não existir, deixe label vazio.
-                                - Extraia TODOS os preços de TODAS as colunas.
+                                REGRAS DE OURO:
+                                1. SEJA EXAUSTIVO: Se houver 100 linhas, extraia 100 itens.
+                                2. LABEL: Se for Matrix, Label = Cabeçalho da Coluna. Se não, Label = Tamanho específico ou Vazio.
+                                3. PREÇO: Numérico (float). Use ponto para decimal.
                             ` }
                         ]
                     }],
@@ -170,6 +172,7 @@ class PdfParserAIService {
                 const content = response.choices[0].message.content;
                 const parsed = JSON.parse(content);
                 mergedResults = parsed.items || [];
+                console.log(`[PdfParserAI] Fast Path extracted ${mergedResults.length} items.`);
 
             } else {
                 console.log("[PdfParserAI] Chunking PDF for GPT-4o...");
@@ -189,9 +192,25 @@ class PdfParserAIService {
                                     { type: "file", file: { filename: "chunk.pdf", file_data: fileData } },
                                     {
                                         type: "text", text: `
-                                        Extraia dados da Tabela Matricial.
-                                        Relacione o CÓDIGO (Linha) com o CABEÇALHO DA COLUNA (Tamanho).
-                                        Retorne JSON OBRIGATÓRIO: { "items": [{"code": "...", "price": 0.00, "label": "Cabeçalho da Coluna"}] }
+                                        VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO.
+                                        SUA MISSÃO: Extrair TODOS os produtos e preços da imagem. NÃO PULE NENHUM.
+                                        
+                                        ESTRUTURA DINÂMICA (Pode variar):
+                                        A) TABELA MATRICIAL (Colunas = Tamanhos):
+                                           - Cabeçalhos: "P a G", "1 a 3".
+                                           - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
+                                        
+                                        B) TABELA SIMPLES (Lista):
+                                           - Ref 123 ......... R$ 10,00
+                                           - Se houver tamanho na descrição (ex: "Ref 123 P/M"), coloque "P/M" no label.
+                                        
+                                        SAÍDA JSON OBRIGATÓRIA:
+                                        { "items": [{"code": "...", "price": 0.00, "label": "..."}] }
+                                        
+                                        REGRAS DE OURO:
+                                        1. SEJA EXAUSTIVO.
+                                        2. LABEL: Se Matrix, use Cabeçalho da Coluna. Se não, Label Específico ou Vazio.
+                                        3. PREÇO: Numérico (float).
                                     ` }
                                 ]
                             }],
@@ -202,6 +221,7 @@ class PdfParserAIService {
                         const parsed = JSON.parse(content);
                         if (parsed.items && Array.isArray(parsed.items)) {
                             mergedResults.push(...parsed.items);
+                            console.log(`[PdfParserAI] Chunk extracted ${parsed.items.length} items.`);
                         }
 
                     } catch (e) {
