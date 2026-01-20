@@ -76,14 +76,14 @@ class PdfParserAIService {
      * Calls gemini_extract.py to get JSON data from PDF images
      */
     async extractProductsFromPdfVision(pdfPath) {
-        console.log('[PdfParserAI] Running OpenAI GPT-4o Extraction (Smart Chunking)...');
+        console.log('[PdfParserAI] Running OpenAI GPT-4o Extraction (Forced Chunking)...');
 
         const { PDFDocument } = require('pdf-lib');
         const fsPromises = require('fs').promises;
         const OpenAI = require('openai');
 
         // Helper: Split PDF
-        async function splitPDFByPages(fullPath, pagesPerChunk = 50) {
+        async function splitPDFByPages(fullPath, pagesPerChunk = 10) { // CHANGED: Default 10
             const existingPdfBytes = await fsPromises.readFile(fullPath);
             const pdfDoc = await PDFDocument.load(existingPdfBytes);
             const totalPages = pdfDoc.getPageCount();
@@ -114,122 +114,68 @@ class PdfParserAIService {
             const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
             // Check file size to decide strategy
-            const fileStats = await fsPromises.stat(pdfPath);
-            const fileSizeMB = fileStats.size / (1024 * 1024);
-            const existingPdfBytes = await fsPromises.readFile(pdfPath);
-            const pdfDoc = await PDFDocument.load(existingPdfBytes);
-            const totalPages = pdfDoc.getPageCount();
+            // FORCED CHUNKING: Ignoramos o tamanho do arquivo/paginas e sempre chunkamos para garantir saida completa.
 
             let mergedResults = [];
 
-            // FAST PATH
-            if (totalPages <= 100 && fileSizeMB <= 32) {
-                console.log("[PdfParserAI] Fast Path: Sending entire PDF to GPT-4o.");
-                const base64PDF = existingPdfBytes.toString('base64');
-                const fileData = `data:application/pdf;base64,${base64PDF}`;
+            // ALWAYS USE CHUNKING (Disabled Fast Path to Avoid Token Limits)
+            console.log("[PdfParserAI] Strategy: Forced Chunking (10 Pages/Req) to ensure completeness.");
 
-                const response = await openai.chat.completions.create({
-                    model: "gpt-4o",
-                    messages: [{
-                        role: "user",
-                        content: [
-                            { type: "file", file: { filename: "pricelist.pdf", file_data: fileData } },
-                            {
-                                type: "text", text: `
-                                VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO.
-                                
-                                SUA MISSÃO: Extrair TODOS os produtos e preços da imagem. NÃO PULE NENHUM.
-                                
-                                ESTRUTURA DINÂMICA (Pode variar):
-                                A) TABELA MATRICIAL (Colunas = Tamanhos):
-                                   - Cabeçalhos: "P a G", "1 a 3", "4 a 8".
-                                   - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
-                                   - IMPORTANTE: IGNORE colunas de "Coleção" ou prefixos (ex: MO26). Pegue apenas o CÓDIGO NUMÉRICO.
-                                
-                                B) TABELA SIMPLES (Lista):
-                                   - Ref 123 ......... R$ 10,00
-                                   - Se houver tamanho na descrição (ex: "Ref 123 P/M"), coloque "P/M" no label.
-                                
-                                SAÍDA JSON OBRIGATÓRIA:
+            // Chunk Size = 10 Pages (Balanced Context vs Output Limit)
+            const chunks = await splitPDFByPages(pdfPath, 10);
+
+            for (const chunk of chunks) {
+                try {
+                    console.log(`[PdfParserAI] Processing pages ${chunk.startPage}-${chunk.endPage}`);
+                    const base64PDF = chunk.buffer.toString('base64');
+                    const fileData = `data:application/pdf;base64,${base64PDF}`;
+
+                    const response = await openai.chat.completions.create({
+                        model: "gpt-4o",
+                        messages: [{
+                            role: "user",
+                            content: [
+                                { type: "file", file: { filename: "chunk.pdf", file_data: fileData } },
                                 {
-                                  "items": [
-                                     {"code": "...", "price": 0.00, "label": "..."},
-                                     {"code": "...", "price": 0.00, "label": "..."}
-                                  ]
-                                }
-                                
-                                REGRAS DE OURO:
-                                1. SEJA EXAUSTIVO: Se houver 100 linhas, extraia 100 itens.
-                                2. CÓDIGO LIMPO: Se estiver escrito "MO26 2001631", extraia apenas "2001631".
-                                3. PREÇO: Numérico (float). Use ponto para decimal.
-                            ` }
-                        ]
-                    }],
-                    response_format: { type: "json_object" },
-                    max_tokens: 16000
-                });
-
-                const content = response.choices[0].message.content;
-                const parsed = JSON.parse(content);
-                mergedResults = parsed.items || [];
-                console.log(`[PdfParserAI] Fast Path extracted ${mergedResults.length} items.`);
-
-            } else {
-                console.log("[PdfParserAI] Chunking PDF for GPT-4o...");
-                const chunks = await splitPDFByPages(pdfPath, 50);
-
-                for (const chunk of chunks) {
-                    try {
-                        console.log(`[PdfParserAI] Processing pages ${chunk.startPage}-${chunk.endPage}`);
-                        const base64PDF = chunk.buffer.toString('base64');
-                        const fileData = `data:application/pdf;base64,${base64PDF}`;
-
-                        const response = await openai.chat.completions.create({
-                            model: "gpt-4o",
-                            messages: [{
-                                role: "user",
-                                content: [
-                                    { type: "file", file: { filename: "chunk.pdf", file_data: fileData } },
-                                    {
-                                        type: "text", text: `
-                                        VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO.
-                                        SUA MISSÃO: Extrair TODOS os produtos e preços da imagem. NÃO PULE NENHUM.
-                                        
-                                        ESTRUTURA DINÂMICA (Pode variar):
-                                        A) TABELA MATRICIAL (Colunas = Tamanhos):
-                                           - Cabeçalhos: "P a G", "1 a 3".
-                                           - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
-                                           - IMPORTANTE: IGNORE colunas de "Coleção" ou prefixos (ex: MO26). Pegue apenas o CÓDIGO NUMÉRICO.
-                                        
-                                        B) TABELA SIMPLES (Lista):
-                                           - Ref 123 ......... R$ 10,00
-                                           - Se houver tamanho na descrição (ex: "Ref 123 P/M"), coloque "P/M" no label.
-                                        
-                                        SAÍDA JSON OBRIGATÓRIA:
-                                        { "items": [{"code": "...", "price": 0.00, "label": "..."}] }
-                                        
-                                        REGRAS DE OURO:
-                                        1. SEJA EXAUSTIVO.
-                                        2. CÓDIGO LIMPO: Se estiver escrito "MO26 2001631", extraia apenas "2001631".
-                                        3. PREÇO: Numérico (float).
-                                    ` }
-                                ]
-                            }],
-                            response_format: { type: "json_object" },
-                            max_tokens: 16000
-                        });
-                        const content = response.choices[0].message.content;
-                        const parsed = JSON.parse(content);
-                        if (parsed.items && Array.isArray(parsed.items)) {
-                            mergedResults.push(...parsed.items);
-                            console.log(`[PdfParserAI] Chunk extracted ${parsed.items.length} items.`);
-                        }
-
-                    } catch (e) {
-                        console.error(`[PdfParserAI] Chunk Error: ${e.message}`);
+                                    type: "text", text: `
+                                    VOCÊ É UM EXTRATOR DE TABELAS DE PREÇO.
+                                    SUA MISSÃO: Extrair TODOS os produtos e preços da imagem. NÃO PULE NENHUM.
+                                    
+                                    ESTRUTURA DINÂMICA (Pode variar):
+                                    A) TABELA MATRICIAL (Colunas = Tamanhos):
+                                       - Cabeçalhos: "P a G", "1 a 3".
+                                       - Cruzar Linha (Ref) + Coluna (Tamanho) = Preço.
+                                       - IMPORTANTE: IGNORE colunas de "Coleção" ou prefixos (ex: MO26). Pegue apenas o CÓDIGO NUMÉRICO.
+                                    
+                                    B) TABELA SIMPLES (Lista):
+                                       - Ref 123 ......... R$ 10,00
+                                       - Se houver tamanho na descrição (ex: "Ref 123 P/M"), coloque "P/M" no label.
+                                    
+                                    SAÍDA JSON OBRIGATÓRIA:
+                                    { "items": [{"code": "...", "price": 0.00, "label": "..."}] }
+                                    
+                                    REGRAS DE OURO:
+                                    1. SEJA EXAUSTIVO.
+                                    2. CÓDIGO LIMPO: Se estiver escrito "MO26 2001631", extraia apenas "2001631".
+                                    3. PREÇO: Numérico (float).
+                                ` }
+                            ]
+                        }],
+                        response_format: { type: "json_object" },
+                        max_tokens: 16000
+                    });
+                    const content = response.choices[0].message.content;
+                    const parsed = JSON.parse(content);
+                    if (parsed.items && Array.isArray(parsed.items)) {
+                        mergedResults.push(...parsed.items);
+                        console.log(`[PdfParserAI] Chunk extracted ${parsed.items.length} items.`);
                     }
+
+                } catch (e) {
+                    console.error(`[PdfParserAI] Chunk Error: ${e.message}`);
                 }
             }
+
 
             // Aggregation Map (Fixing Overwrite Issue)
             const map = new Map();
