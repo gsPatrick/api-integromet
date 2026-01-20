@@ -150,24 +150,77 @@ class CatalogController {
 
                         console.log(`[CatalogController] Starting Extraction for ${catalogName}...`);
 
-                        // 3.1. NEW: Call Local Python Service (Gemini Flash) - Replaces OpenAI extraction
-                        // This is "Our Database" solution requested by user
+                        // 3.1. NEW: Native Node.js Gemini Vision Extraction
+                        // No extra python server needed.
                         let extractedProducts = [];
                         try {
-                            const axios = require('axios');
-                            console.log(`[CatalogController] Calling Python Service for extraction: ${pdfPath}`);
-                            const pyResponse = await axios.post('http://localhost:5002/extract-catalog', {
-                                pdfPath: pdfPath
+                            const { GoogleGenerativeAI } = require("@google/generative-ai");
+                            const { GoogleAIFileManager } = require("@google/generative-ai/server");
+
+                            // Use Env var or fallback (User provided key)
+                            const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAS_ZW-fPaVg88uYEgACMys0Ne0fmU6Tvk";
+
+                            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                            const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
+
+                            console.log(`[CatalogController] Uploading to Gemini directly: ${pdfPath}`);
+
+                            const uploadResponse = await fileManager.uploadFile(pdfPath, {
+                                mimeType: "application/pdf",
+                                displayName: catalogName,
                             });
 
-                            if (pyResponse.data && pyResponse.data.products) {
-                                extractedProducts = pyResponse.data.products;
-                                console.log(`[CatalogController] PYTHON SUCCESS: Extracted ${extractedProducts.length} products locally.`);
+                            console.log(`[CatalogController] Gemini File Uploaded: ${uploadResponse.file.uri}`);
+
+                            // Wait for processing (usually fast for small files, but PDFs need moment)
+                            let file = await fileManager.getFile(uploadResponse.file.name);
+                            while (file.state === "PROCESSING") {
+                                console.log("[CatalogController] Gemini Processing PDF...");
+                                await new Promise((resolve) => setTimeout(resolve, 2000));
+                                file = await fileManager.getFile(uploadResponse.file.name);
                             }
-                        } catch (pyError) {
-                            console.error('[CatalogController] Python Service Failed:', pyError.message);
-                            console.warn('[CatalogController] Falling back to OpenAI extraction...');
-                            // Fallback to old method if local fails
+
+                            if (file.state === "FAILED") {
+                                throw new Error("Gemini File Processing Failed");
+                            }
+
+                            // Generate Content
+                            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                            const result = await model.generateContent([
+                                {
+                                    fileData: {
+                                        mimeType: uploadResponse.file.mimeType,
+                                        fileUri: uploadResponse.file.uri
+                                    }
+                                },
+                                {
+                                    text: `
+                                    VOCÊ É UM EXTRATOR DE DADOS DE CATÁLOGO.
+                                    Analise este PDF visualmente e extraia TODOS os produtos.
+                                    
+                                    SAÍDA DOC (JSON Array):
+                                    [
+                                        { "code": "REF 123", "name": "Produto X", "price": 99.90 },
+                                        ...
+                                    ]
+                                    
+                                    REGRAS:
+                                    1. Extraia de TODAS as páginas (o PDF tem várias).
+                                    2. Se não tiver código, use o NOME.
+                                    3. Busque preços (ex: R$ 99,90).
+                                ` }
+                            ]);
+
+                            const responseText = result.response.text();
+                            // Clean JSON
+                            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+                            if (jsonMatch) {
+                                extractedProducts = JSON.parse(jsonMatch[0]);
+                                console.log(`[CatalogController] GEMINI NODE SUCCESS: Extracted ${extractedProducts.length} products visually.`);
+                            }
+                        } catch (nodeGeminiError) {
+                            console.error('[CatalogController] Native Gemini Failed:', nodeGeminiError.message);
+                            // Fallback to old method
                             extractedProducts = await catalogAssistant.extractAllProductsFast(fileId);
                         }
                         console.log(`[CatalogController] Extracted ${extractedProducts.length} products from OpenAI (Fast Mode).`);

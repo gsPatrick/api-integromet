@@ -164,38 +164,61 @@ app.get('/debug/assistant-source', async (req, res) => {
     }
 });
 
-// DEBUG ENDPOINT: Test Local Python Search Performance
+// DEBUG ENDPOINT: Test Native Gemini Node Search
 app.get('/debug/local-search', async (req, res) => {
     try {
-        const axios = require('axios');
         const path = require('path');
         const fs = require('fs');
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const { GoogleAIFileManager } = require("@google/generative-ai/server");
 
-        const catalogName = req.query.catalog || 'catalog-emp_rio_da_fantasia_jan_26-1768858405148.pdf'; // Default to known file
-        // Try to find the file in uploads/catalogs
+        const catalogName = req.query.catalog || 'catalog-emp_rio_da_fantasia_jan_26-1768858405148.pdf';
         const pdfPath = path.join(__dirname, '../public/uploads/catalogs', catalogName);
 
         if (!fs.existsSync(pdfPath)) {
             return res.status(404).json({ error: 'PDF not found', path: pdfPath });
         }
 
-        console.log(`[Debug] Testing Local Python Search for: ${catalogName}`);
+        console.log(`[Debug] Testing Native Gemini Search for: ${catalogName}`);
         const startTime = Date.now();
 
-        // Call Python Service
-        const pyResponse = await axios.post('http://localhost:5002/extract-catalog', {
-            pdfPath: pdfPath
+        // GEMINI NATIVE LOGIC
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyAS_ZW-fPaVg88uYEgACMys0Ne0fmU6Tvk";
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
+
+        const uploadResponse = await fileManager.uploadFile(pdfPath, {
+            mimeType: "application/pdf",
+            displayName: "Debug_" + Date.now(),
         });
+
+        let file = await fileManager.getFile(uploadResponse.file.name);
+        while (file.state === "PROCESSING") {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            file = await fileManager.getFile(uploadResponse.file.name);
+        }
+
+        if (file.state === "FAILED") throw new Error("Processing Failed");
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent([
+            { fileData: { mimeType: uploadResponse.file.mimeType, fileUri: uploadResponse.file.uri } },
+            { text: "Extraia TODOS os produtos em JSON: [{code, name, price}]" }
+        ]);
+
+        const text = result.response.text();
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        const products = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
 
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
 
         res.json({
             status: 'success',
-            catalog: catalogName,
+            engine: 'Gemini Native Node',
             time_seconds: duration,
-            products_found: pyResponse.data.total,
-            sample_product: pyResponse.data.products ? pyResponse.data.products.slice(0, 3) : []
+            products_found: products.length,
+            sample: products.slice(0, 3)
         });
 
     } catch (error) {
