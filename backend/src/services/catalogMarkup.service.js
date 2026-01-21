@@ -461,16 +461,17 @@ class CatalogMarkupService {
                 };
 
                 // Decision Strategy:
-                // 1. If Code is Far Left (< 25% Width), Prefer FAR RIGHT (Report Mode)
+                // 1. If Code is Far Left (< 30% Width), we ASSUME Report Mode.
+                //    We aggressively look for a target on the right to overwrite.
+
                 let selectedPos = posRight;
-                const isFarLeft = item.x < (pageWidth * 0.25);
-                const isRightBlocked = hasCollision(posRight);
+                const isFarLeft = item.x < (pageWidth * 0.30); // Increased to 30%
 
-                if (isRightBlocked && isFarLeft) {
+                // FORCE Check for Overwrite Target if Left Aligned (Don't wait for collision)
+                let targetFound = false;
+
+                if (isFarLeft) {
                     // REPORT MODE: TARGET OVERWRITE
-                    // Instead of guessing X, let's find the text we want to overwrite!
-                    // Look for the Right-Most text on this specific line.
-
                     const lineY = item.y;
                     const toleranceY = 10; // +/- 10px vertical range
 
@@ -481,11 +482,12 @@ class CatalogMarkupService {
                     );
 
                     // Sort by X descending (Right most first)
+                    // AND Filter for things that look like prices/numbers? Or just take the last one?
+                    // Let's take the right-most element.
                     lineItems.sort((a, b) => b.x - a.x);
 
                     if (lineItems.length > 0) {
                         const target = lineItems[0]; // The old price/total
-                        // console.log(`[Overwrite] Targeting existing text at X=${target.x}: "${target.text}"`);
 
                         selectedPos = {
                             x: target.x - 5, // Little padding left
@@ -494,18 +496,27 @@ class CatalogMarkupService {
                             h: boxHeight,
                             type: 'OVERWRITE_TARGET'
                         };
-                    } else {
-                        // Fallback to Fixed logical position if empty
-                        selectedPos = posFarRight;
+                        targetFound = true;
                     }
-                } else if (isRightBlocked) {
-                    if (!hasCollision(posAbove)) {
-                        selectedPos = posAbove;
+                }
+
+                // If no target found, fall back to standard collision logic
+                if (!targetFound) {
+                    const isRightBlocked = hasCollision(posRight);
+                    if (isRightBlocked) {
+                        if (!hasCollision(posAbove)) {
+                            selectedPos = posAbove;
+                        } else {
+                            // Fallback to Far Right (Margin) or Below
+                            selectedPos = hasCollision(posFarRight) ? posBelow : posFarRight;
+                        }
                     } else {
-                        selectedPos = hasCollision(posFarRight) ? posBelow : posFarRight;
+                        // Right is free.
+                        // BUT if it was Far Left and "Report Mode", we might still prefer Far Right if user wants alignment?
+                        // Current User Request: "Sobrepor o valor existente".
+                        // If we didn't find a target, maybe there IS no value? Then posRight is fine.
+                        selectedPos = posRight;
                     }
-                } else {
-                    selectedPos = posRight;
                 }
 
                 // 4. Draw
