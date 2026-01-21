@@ -294,7 +294,8 @@ class CatalogMarkupService {
 
     normalizeCode(code) {
         if (!code) return '';
-        return code.replace(/\s+/g, '').toUpperCase();
+        // Aggressively remove ALL spaces to handle "1 03 63 05" -> "1036305"
+        return String(code).replace(/\s+/g, '').toUpperCase();
     }
 
     async generateMergedPdf(visualPdfPath, pricePdfPaths, markupPercentage) {
@@ -402,9 +403,6 @@ class CatalogMarkupService {
                 };
 
                 // Position B: ABOVE
-                // X aligned with code X.
-                // Y (bottom of box) = Code Top Y + 2 (small gap)
-                // Wait, if Y is bottom-left, Y must be > Code Top Y.
                 const posAbove = {
                     x: item.x,
                     y: codeTopY + 2,
@@ -414,15 +412,24 @@ class CatalogMarkupService {
                 };
 
                 // Position C: BELOW
-                // X aligned with code X.
-                // Y (top of box) = Code Bottom Y (baseline item.y) - 2.
-                // BoxY = (item.y - 2) - BoxHeight.
                 const posBelow = {
                     x: item.x,
                     y: item.y - 2 - boxHeight,
                     w: boxWidth,
                     h: boxHeight,
                     type: 'BELOW'
+                };
+
+                // Position D: FAR RIGHT (For Reports/Lists)
+                // X = Page Width - Box Width - Margin (e.g. 50px)
+                // Y = CodeTopY - BoxHeight (Aligned Top)
+                const pageWidth = page.getSize().width;
+                const posFarRight = {
+                    x: pageWidth - boxWidth - 30, // 30px Margin from edge
+                    y: codeTopY - boxHeight,
+                    w: boxWidth,
+                    h: boxHeight,
+                    type: 'FAR_RIGHT'
                 };
 
                 // 3. Check Collision
@@ -447,25 +454,41 @@ class CatalogMarkupService {
                         const noOverlap = r1.l > r2.r || r1.r < r2.l || r1.b > r2.t || r1.t < r2.b;
                         if (!noOverlap) {
                             // Collision found!
-                            // console.log(`Collision at ${rect.type} with "${obs.text}"`);
                             return true;
                         }
                     }
                     return false;
                 };
 
-                // Decision Strategy: Right -> Above -> Below (Default)
-                let selectedPos = posRight;
+                // Decision Strategy:
+                // 1. If Code is Far Left (< 25% Width), Prefer FAR RIGHT (Report Mode)
+                //    - But ONLY if Right Immediate is blocked (don't jump if it's a tight grid) OR just prioritize it?
+                //    - Let's say: If Collision at Right -> Go Far Right.
+                //    - Also: If Far Right has collision (e.g. Old Price), we ACCEPT it (Overwrite).
 
-                if (hasCollision(posRight)) {
-                    if (!hasCollision(posAbove)) {
+                let selectedPos = posRight;
+                const isFarLeft = item.x < (pageWidth * 0.25);
+                const isRightBlocked = hasCollision(posRight);
+
+                if (isRightBlocked) {
+                    if (isFarLeft) {
+                        // Report Mode: Jump to Far Right
+                        // We ACCEPT collisions at Far Right (Assuming it's the old price we want to cover)
+                        selectedPos = posFarRight;
+                    } else if (!hasCollision(posAbove)) {
                         selectedPos = posAbove;
                     } else {
-                        // If Above also fails, use Below (or Above if Below fails? User suggested Above then Below)
-                        // If both fail, maybe Below is safer or just force Above?
-                        // Let's stick to Below as fallback.
-                        selectedPos = posBelow;
+                        // Fallbacks
+                        selectedPos = hasCollision(posFarRight) ? posBelow : posFarRight;
                     }
+                } else {
+                    // Right is free? 
+                    // Verify if it's a "Spread" table?
+                    // If Far Left and Right is "Free" but clearly empty space...
+                    // Maybe check obstacle density?
+                    // For now, adhere to "Right Immediate" unless blocked.
+                    // If user wants Far Right, usually there's text (Desc) blocking Immediate Right.
+                    selectedPos = posRight;
                 }
 
                 // 4. Draw
