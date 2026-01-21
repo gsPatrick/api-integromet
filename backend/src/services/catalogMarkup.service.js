@@ -462,32 +462,49 @@ class CatalogMarkupService {
 
                 // Decision Strategy:
                 // 1. If Code is Far Left (< 25% Width), Prefer FAR RIGHT (Report Mode)
-                //    - But ONLY if Right Immediate is blocked (don't jump if it's a tight grid) OR just prioritize it?
-                //    - Let's say: If Collision at Right -> Go Far Right.
-                //    - Also: If Far Right has collision (e.g. Old Price), we ACCEPT it (Overwrite).
-
                 let selectedPos = posRight;
                 const isFarLeft = item.x < (pageWidth * 0.25);
                 const isRightBlocked = hasCollision(posRight);
 
-                if (isRightBlocked) {
-                    if (isFarLeft) {
-                        // Report Mode: Jump to Far Right
-                        // We ACCEPT collisions at Far Right (Assuming it's the old price we want to cover)
+                if (isRightBlocked && isFarLeft) {
+                    // REPORT MODE: TARGET OVERWRITE
+                    // Instead of guessing X, let's find the text we want to overwrite!
+                    // Look for the Right-Most text on this specific line.
+
+                    const lineY = item.y;
+                    const toleranceY = 10; // +/- 10px vertical range
+
+                    const lineItems = allObstacles.filter(o =>
+                        o.pageIndex === item.pageIndex &&
+                        Math.abs(o.y - lineY) < toleranceY &&
+                        o.x > (pageWidth * 0.5) // Must be on the right half
+                    );
+
+                    // Sort by X descending (Right most first)
+                    lineItems.sort((a, b) => b.x - a.x);
+
+                    if (lineItems.length > 0) {
+                        const target = lineItems[0]; // The old price/total
+                        // console.log(`[Overwrite] Targeting existing text at X=${target.x}: "${target.text}"`);
+
+                        selectedPos = {
+                            x: target.x - 5, // Little padding left
+                            y: codeTopY - boxHeight,
+                            w: Math.max(boxWidth, target.width + 10), // Ensure we cover it all
+                            h: boxHeight,
+                            type: 'OVERWRITE_TARGET'
+                        };
+                    } else {
+                        // Fallback to Fixed logical position if empty
                         selectedPos = posFarRight;
-                    } else if (!hasCollision(posAbove)) {
+                    }
+                } else if (isRightBlocked) {
+                    if (!hasCollision(posAbove)) {
                         selectedPos = posAbove;
                     } else {
-                        // Fallbacks
                         selectedPos = hasCollision(posFarRight) ? posBelow : posFarRight;
                     }
                 } else {
-                    // Right is free? 
-                    // Verify if it's a "Spread" table?
-                    // If Far Left and Right is "Free" but clearly empty space...
-                    // Maybe check obstacle density?
-                    // For now, adhere to "Right Immediate" unless blocked.
-                    // If user wants Far Right, usually there's text (Desc) blocking Immediate Right.
                     selectedPos = posRight;
                 }
 
